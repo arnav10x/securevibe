@@ -42,3 +42,6 @@ next-env.d.ts
 
 # keep the documented example env file
 !.env.example
+
+# fixture env files must be committed (they are fake test data)
+!tests/fixtures/**/.env
