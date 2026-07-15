@@ -4,7 +4,7 @@ import { ManageBillingButton, UpgradeButton } from '@/components/billing-buttons
 import { FREE_SCANS_PER_MONTH, startOfMonthUtc } from '@/lib/quota';
 import { billingConfigured } from '@/lib/stripe';
 
-export const metadata = { title: 'Account — SecureVibe' };
+export const metadata = { title: 'Account' };
 
 export default async function AccountPage({
   searchParams,

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ButtonLink, Card, SeverityBadge } from '@/components/ui';
 import { FREE_SCANS_PER_MONTH, startOfMonthUtc } from '@/lib/quota';
 
-export const metadata = { title: 'Dashboard — SecureVibe' };
+export const metadata = { title: 'Dashboard' };
 
 const STATUS_LABELS: Record<string, string> = {
   queued: '⏳ Queued',

@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Alert, Card, SeverityBadge } from '@/components/ui';
 import { AutoRefresh } from '@/components/auto-refresh';
 
-export const metadata = { title: 'Scan report — SecureVibe' };
+export const metadata = { title: 'Scan report' };
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
 
