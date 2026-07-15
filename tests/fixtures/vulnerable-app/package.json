@@ -1,0 +1,8 @@
+{
+  "name": "vulnerable-fixture-app",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "securevibe-test-nonexistent-pkg-8f3k2": "^1.0.0"
+  }
+}

@@ -1,0 +1,3 @@
+# Fixture requirements file
+requests==2.31.0
+securevibe-fake-pypi-pkg-9q1z==1.0.0
