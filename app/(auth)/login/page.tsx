@@ -40,8 +40,8 @@ function LoginForm() {
 
   return (
     <Card>
-      <h1 className="mb-1 text-xl font-bold text-slate-100">Welcome back</h1>
-      <p className="mb-6 text-sm text-slate-400">Sign in to run your security scans.</p>
+      <h1 className="mb-1 text-xl font-semibold tracking-tight text-fg">Welcome back</h1>
+      <p className="mb-6 text-sm text-fg-dim">Sign in to run your security scans.</p>
 
       {notice && (
         <div className="mb-4">
@@ -71,7 +71,7 @@ function LoginForm() {
             <Label htmlFor="password">Password</Label>
             <Link
               href="/forgot-password"
-              className="mb-1.5 text-xs text-emerald-400 hover:text-emerald-300"
+              className="mb-1.5 text-xs text-signal transition-colors hover:text-signal-bright"
             >
               Forgot password?
             </Link>
@@ -90,9 +90,9 @@ function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-400">
+      <p className="mt-6 text-center text-sm text-fg-dim">
         No account yet?{' '}
-        <Link href="/signup" className="text-emerald-400 hover:text-emerald-300">
+        <Link href="/signup" className="text-signal transition-colors hover:text-signal-bright">
           Sign up free
         </Link>
       </p>

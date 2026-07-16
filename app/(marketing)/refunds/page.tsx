@@ -34,7 +34,7 @@ export default function RefundsPage() {
       <h2>How to request a refund</h2>
       <p>
         Email{' '}
-        <a href="mailto:billing@securevibe.app" className="text-emerald-400 hover:underline">
+        <a href="mailto:billing@securevibe.app" className="hover:underline">
           billing@securevibe.app
         </a>{' '}
         from your account email. Refunds are issued to the original payment method via Stripe

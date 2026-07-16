@@ -38,7 +38,7 @@ export default function SecurityPage() {
       <p>
         We&apos;d genuinely like to know — a security tool should hold itself to the standard it
         preaches. Please email{' '}
-        <a href="mailto:security@securevibe.app" className="text-emerald-400 hover:underline">
+        <a href="mailto:security@securevibe.app" className="hover:underline">
           security@securevibe.app
         </a>{' '}
         with:

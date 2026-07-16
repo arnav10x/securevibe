@@ -56,7 +56,7 @@ export default function TermsPage() {
         unlimited scans, subject to fair-use rate limits. Payments are processed by Stripe;
         subscriptions renew monthly until cancelled. You can cancel anytime from your account
         page — access continues to the end of the paid period. Refunds are described in our{' '}
-        <a href="/refunds" className="text-emerald-400 hover:underline">
+        <a href="/refunds" className="hover:underline">
           Refund Policy
         </a>
         .
@@ -67,7 +67,7 @@ export default function TermsPage() {
         You retain all rights to code you submit. You grant us only the minimal license needed
         to process it: copying it into an isolated workspace, analyzing it, and generating your
         report — after which the code is permanently deleted, as described in our{' '}
-        <a href="/privacy" className="text-emerald-400 hover:underline">
+        <a href="/privacy" className="hover:underline">
           Privacy Policy
         </a>
         . We never use your code to train AI models.
@@ -114,7 +114,7 @@ export default function TermsPage() {
       <h2>10. Contact</h2>
       <p>
         Questions about these terms:{' '}
-        <a href="mailto:legal@securevibe.app" className="text-emerald-400 hover:underline">
+        <a href="mailto:legal@securevibe.app" className="hover:underline">
           legal@securevibe.app
         </a>
       </p>
