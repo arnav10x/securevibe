@@ -1,26 +1,383 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/*  SecureVibe design system — "Obsidian Signal"                       */
+/*                                                                     */
+/*  One idea drives everything: a dark obsidian field with a living    */
+/*  phosphor-green "signal" running through it. Surfaces are glass,    */
+/*  type is a precision grotesk with an editorial serif accent, and    */
+/*  data/labels are set in mono like instrument readouts.              */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  /* Ink — the obsidian background scale (green-cast near-blacks) */
+  --color-ink: #060a09;
+  --color-ink-900: #0a1210;
+  --color-ink-800: #101b17;
+  --color-ink-700: #16241f;
+
+  /* Text */
+  --color-fg: #eaf4ef;
+  --color-fg-dim: #9db4ab;
+  --color-fg-mute: #6b8279;
+
+  /* Signal — the phosphor accent */
+  --color-signal: #36e2a8;
+  --color-signal-bright: #7cf5cb;
+  --color-signal-deep: #0fa47a;
+
+  /* Severity ladder */
+  --color-critical: #ff6b6b;
+  --color-high: #ffa25e;
+  --color-medium: #ffd36e;
+  --color-low: #7cb8ff;
+
+  /* Type */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+
+  /* Motion — one rhythm shared by every animation */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------------------------------------------------------------- */
+/*  Base                                                             */
+/* ---------------------------------------------------------------- */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --line: rgba(163, 190, 180, 0.13); /* hairline borders everywhere */
+  --line-strong: rgba(163, 190, 180, 0.28);
+  --glow: 0 0 24px rgba(54, 226, 168, 0.35);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
+  background: var(--color-ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(54, 226, 168, 0.28);
+  color: #eafff6;
+}
+
+/* Visible focus everywhere, on-brand */
+:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Quiet scrollbar that matches the obsidian field */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(163, 190, 180, 0.25) transparent;
+}
+
+/* ---------------------------------------------------------------- */
+/*  Typography helpers                                               */
+/* ---------------------------------------------------------------- */
+
+/* Mono "instrument label" used for section kickers and data readouts */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-signal);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.kicker::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-signal);
+  box-shadow: 0 0 10px rgba(54, 226, 168, 0.9);
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+
+/* Big editorial headline: grotesk with an italic serif accent word */
+.display {
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.display em,
+.serif-accent {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--color-signal-bright);
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, #eaf4ef 20%, #9db4ab 50%, #eaf4ef 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------------------------------------------------------------- */
+/*  Surfaces                                                         */
+/* ---------------------------------------------------------------- */
+
+/* Glass panel: translucent surface + gradient hairline border */
+.glass {
+  position: relative;
+  background:
+    linear-gradient(160deg, rgba(22, 36, 31, 0.55), rgba(10, 18, 16, 0.65));
+  border: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Brighter top edge, like light catching the glass */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(234, 244, 239, 0.07), transparent 32%);
+}
+
+/* Faint blueprint grid used behind key sections */
+.grid-bg {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 75%);
+}
+
+/* Film-grain overlay: keeps large dark areas from looking flat */
+.noise::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Spotlight card: a radial glow that follows the pointer.            */
+/* --mx / --my are set from JS (see components/fx.tsx).               */
+.spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-out-soft);
+  background: radial-gradient(
+    340px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(54, 226, 168, 0.09),
+    transparent 65%
+  );
+}
+
+.spotlight:hover::after {
+  opacity: 1;
+}
+
+/* Animated conic border for the "Pro" pricing card */
+@property --spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.beam-border {
+  position: relative;
+}
+
+.beam-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--spin),
+    transparent 0%,
+    rgba(54, 226, 168, 0.9) 12%,
+    transparent 26%,
+    transparent 55%,
+    rgba(124, 245, 203, 0.5) 68%,
+    transparent 80%
+  );
+  /* Show only the ring: paint the gradient, then punch out the middle.
+     Only the -webkit- shorthand is used (it aliases the standard property
+     everywhere), and the composite declarations come last — any mask
+     shorthand after them would silently reset the compositing back to add. */
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  animation: spin-border 6s linear infinite;
+}
+
+@keyframes spin-border {
+  to {
+    --spin: 360deg;
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/*  Motion vocabulary                                                */
+/* ---------------------------------------------------------------- */
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(26px); filter: blur(5px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes shine {
+  from { transform: translateX(-130%) skewX(-18deg); }
+  to { transform: translateX(230%) skewX(-18deg); }
+}
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes beam-sweep {
+  0% { top: -12%; opacity: 0; }
+  8% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { top: 104%; opacity: 0; }
+}
+
+@keyframes blink-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes draw-line {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Scroll-reveal: elements start hidden ONLY when JS is running       */
+/* (the html.js class is added inline in the root layout), so the     */
+/* site stays fully readable without JavaScript.                      */
+html.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(26px);
+  filter: blur(5px);
+  transition:
+    opacity 0.8s var(--ease-out-soft),
+    transform 0.8s var(--ease-out-soft),
+    filter 0.8s var(--ease-out-soft);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+/* Promote to a GPU layer only while the entrance is still pending —
+   keeping will-change on dozens of settled elements wastes memory. */
+html.js [data-reveal]:not(.is-revealed) {
+  will-change: opacity, transform, filter;
+}
+
+html.js [data-reveal].is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* Marquee track (duplicated content scrolls 50% then loops) */
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 36s linear infinite;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Primary-button shine sweep on hover */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  transform: translateX(-130%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+}
+
+.btn-shine:hover::after {
+  animation: shine 0.9s var(--ease-out-soft);
+}
+
+/* ---------------------------------------------------------------- */
+/*  Reduced motion: everything settles instantly, nothing loops      */
+/* ---------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  html.js [data-reveal] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+
+  .kicker::before,
+  .marquee-track,
+  .beam-border::before {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

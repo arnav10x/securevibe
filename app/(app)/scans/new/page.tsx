@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Alert, Button, Card, Input, Label } from '@/components/ui';
+import { IconGitHub, IconUpload, LogoMark } from '@/components/icons';
 
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
 
@@ -96,46 +97,59 @@ export default function NewScanPage() {
 
   if (phase === 'scanning') {
     return (
-      <Card className="mx-auto max-w-xl text-center">
-        <p className="text-4xl" aria-hidden>
-          🔎
-        </p>
-        <h1 className="mt-3 text-xl font-bold">Scanning your code…</h1>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
+      <Card className="mx-auto max-w-xl py-14 text-center">
+        {/* Pulsing mark inside expanding rings — the scan heartbeat */}
+        <div className="relative mx-auto h-20 w-20">
+          <span className="absolute inset-0 animate-ping rounded-2xl border border-signal/40 [animation-duration:2s]" />
+          <span className="absolute inset-0 grid place-items-center rounded-2xl border border-signal/40 bg-signal/10 text-signal shadow-[0_0_40px_rgba(54,226,168,0.35)]">
+            <LogoMark className="h-9 w-9" />
+          </span>
+        </div>
+        <h1 className="mt-7 text-xl font-semibold tracking-tight">Scanning your code…</h1>
+        <p className="mx-auto mt-2.5 max-w-sm text-sm leading-relaxed text-fg-dim">
           Checking for exposed secrets, database misconfigurations, risky dependencies and
           insecure code patterns. Bigger projects can take a minute or two — keep this tab open.
         </p>
-        <div className="mx-auto mt-6 h-1.5 w-48 overflow-hidden rounded-full bg-slate-800">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-500" />
+        <div className="mx-auto mt-7 h-1 w-56 overflow-hidden rounded-full bg-ink-700">
+          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-signal to-transparent [animation:marquee_1.4s_linear_infinite]" />
         </div>
+        <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.2em] text-fg-mute">
+          Source deleted the moment the report is ready
+        </p>
       </Card>
     );
   }
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="mb-1 text-2xl font-bold">New scan</h1>
-      <p className="mb-6 text-sm text-slate-400">
+      <p className="kicker">New scan</p>
+      <h1 className="display mt-2 text-3xl">Point us at your code</h1>
+      <p className="mb-7 mt-3 text-sm leading-relaxed text-fg-dim">
         Your code is scanned in an isolated workspace and permanently deleted the moment the
         report is ready. We keep findings only — never your source.
       </p>
 
       <Card>
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-lg bg-slate-800/60 p-1">
+        {/* Segmented source picker */}
+        <div className="mb-6 grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--line)] bg-ink p-1.5">
           {(
             [
-              ['github', 'Public GitHub repo'],
-              ['zip', 'Upload a .zip'],
-            ] as [Tab, string][]
-          ).map(([value, label]) => (
+              ['github', 'Public GitHub repo', IconGitHub],
+              ['zip', 'Upload a .zip', IconUpload],
+            ] as [Tab, string, typeof IconGitHub][]
+          ).map(([value, label, Icon]) => (
             <button
               key={value}
               type="button"
               onClick={() => setTab(value)}
-              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                tab === value ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              aria-pressed={tab === value}
+              className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                tab === value
+                  ? 'border border-signal/30 bg-signal/10 text-signal-bright shadow-[0_0_20px_rgba(54,226,168,0.12)]'
+                  : 'border border-transparent text-fg-mute hover:text-fg-dim'
               }`}
             >
+              <Icon className="h-4 w-4" />
               {label}
             </button>
           ))}
@@ -158,7 +172,7 @@ export default function NewScanPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {tab === 'github' ? (
             <div>
               <Label htmlFor="repo">Repository URL</Label>
@@ -170,34 +184,59 @@ export default function NewScanPage() {
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
               />
-              <p className="mt-1.5 text-xs text-slate-500">
+              <p className="mt-2 text-xs leading-relaxed text-fg-mute">
                 Public repositories only (up to 50 MB). Private repo support is coming later.
               </p>
             </div>
           ) : (
             <div>
               <Label htmlFor="zip">Project .zip</Label>
+              <label
+                htmlFor="zip"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const dropped = e.dataTransfer.files?.[0];
+                  if (dropped) setFile(dropped);
+                }}
+                className={`group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-9 text-center transition-colors duration-200 ${
+                  file
+                    ? 'border-signal/40 bg-signal/5'
+                    : 'border-[var(--line-strong)] bg-ink hover:border-signal/40 hover:bg-signal/5'
+                }`}
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] bg-ink-800 text-signal transition-transform duration-200 group-hover:-translate-y-0.5">
+                  <IconUpload className="h-5 w-5" />
+                </span>
+                {file ? (
+                  <span className="text-sm font-medium text-signal-bright">{file.name}</span>
+                ) : (
+                  <span className="text-sm text-fg-dim">
+                    <span className="font-medium text-fg">Choose a .zip</span> or drop it here
+                  </span>
+                )}
+                <span className="text-xs text-fg-mute">
+                  Up to 50 MB — no need to include node_modules
+                </span>
+              </label>
               <input
                 ref={fileInputRef}
                 id="zip"
                 type="file"
                 accept=".zip,application/zip"
-                className="block w-full cursor-pointer rounded-lg border border-dashed border-slate-600 bg-slate-900 px-3.5 py-6 text-sm text-slate-400 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:text-white hover:border-slate-500"
+                className="sr-only"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
-              <p className="mt-1.5 text-xs text-slate-500">
-                Up to 50 MB. Zip your project folder — no need to include node_modules.
-              </p>
             </div>
           )}
 
-          <label className="flex items-start gap-3 text-sm text-slate-300">
+          <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-fg-dim">
             <input
               type="checkbox"
               required
               checked={rightsConfirmed}
               onChange={(e) => setRightsConfirmed(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 accent-emerald-500"
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--line-strong)] bg-ink accent-[#36e2a8]"
             />
             <span>
               I have the right to submit this code for analysis (it&apos;s mine, or I&apos;m
@@ -205,7 +244,7 @@ export default function NewScanPage() {
             </span>
           </label>
 
-          <Button type="submit" disabled={busy} className="w-full">
+          <Button type="submit" disabled={busy} className="w-full py-3">
             {phase === 'uploading' ? 'Uploading…' : 'Start scan'}
           </Button>
         </form>

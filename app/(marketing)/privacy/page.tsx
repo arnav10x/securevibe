@@ -90,7 +90,7 @@ export default function PrivacyPage() {
         <li>Reports and account data: kept until you delete them or close your account.</li>
         <li>
           To close your account and erase everything, email{' '}
-          <a href="mailto:privacy@securevibe.app" className="text-emerald-400 hover:underline">
+          <a href="mailto:privacy@securevibe.app" className="hover:underline">
             privacy@securevibe.app
           </a>
           . We complete deletion within 30 days.
@@ -115,7 +115,7 @@ export default function PrivacyPage() {
       <h2>Contact</h2>
       <p>
         Privacy questions:{' '}
-        <a href="mailto:privacy@securevibe.app" className="text-emerald-400 hover:underline">
+        <a href="mailto:privacy@securevibe.app" className="hover:underline">
           privacy@securevibe.app
         </a>
       </p>

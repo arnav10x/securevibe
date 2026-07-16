@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Alert, Button, Card, Input, Label } from '@/components/ui';
+import { IconMail } from '@/components/icons';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -45,14 +46,19 @@ export default function SignupPage() {
   if (sent) {
     return (
       <Card>
-        <h1 className="mb-3 text-xl font-bold text-slate-100">Check your email 📬</h1>
-        <p className="text-sm leading-relaxed text-slate-300">
-          We sent a verification link to <strong className="text-slate-100">{email}</strong>.
+        <h1 className="mb-3 flex items-center gap-2.5 text-xl font-semibold tracking-tight text-fg">
+          <span className="grid h-8 w-8 place-items-center rounded-lg border border-signal/30 bg-signal/10 text-signal">
+            <IconMail className="h-4 w-4" />
+          </span>
+          Check your email
+        </h1>
+        <p className="text-sm leading-relaxed text-fg-dim">
+          We sent a verification link to <strong className="text-fg">{email}</strong>.
           Click it to activate your account, then sign in.
         </p>
-        <p className="mt-4 text-sm text-slate-400">
+        <p className="mt-4 text-sm text-fg-dim">
           Nothing arriving? Check spam, or{' '}
-          <button onClick={() => setSent(false)} className="text-emerald-400 hover:text-emerald-300">
+          <button onClick={() => setSent(false)} className="text-signal transition-colors hover:text-signal-bright">
             try again
           </button>
           .
@@ -63,8 +69,8 @@ export default function SignupPage() {
 
   return (
     <Card>
-      <h1 className="mb-1 text-xl font-bold text-slate-100">Create your account</h1>
-      <p className="mb-6 text-sm text-slate-400">
+      <h1 className="mb-1 text-xl font-semibold tracking-tight text-fg">Create your account</h1>
+      <p className="mb-6 text-sm text-fg-dim">
         Free plan: 3 security scans a month. No credit card needed.
       </p>
 
@@ -97,26 +103,26 @@ export default function SignupPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <p className="mt-1.5 text-xs text-slate-500">At least 8 characters.</p>
+          <p className="mt-1.5 text-xs text-fg-mute">At least 8 characters.</p>
         </div>
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? 'Creating account…' : 'Create account'}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-400">
+      <p className="mt-6 text-center text-sm text-fg-dim">
         Already have an account?{' '}
-        <Link href="/login" className="text-emerald-400 hover:text-emerald-300">
+        <Link href="/login" className="text-signal transition-colors hover:text-signal-bright">
           Sign in
         </Link>
       </p>
-      <p className="mt-4 text-center text-xs leading-relaxed text-slate-500">
+      <p className="mt-4 text-center text-xs leading-relaxed text-fg-mute">
         By signing up you agree to our{' '}
-        <Link href="/terms" className="underline hover:text-slate-300">
+        <Link href="/terms" className="underline transition-colors hover:text-fg-dim">
           Terms
         </Link>{' '}
         and{' '}
-        <Link href="/privacy" className="underline hover:text-slate-300">
+        <Link href="/privacy" className="underline transition-colors hover:text-fg-dim">
           Privacy Policy
         </Link>
         .
