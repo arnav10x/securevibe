@@ -60,8 +60,8 @@ export function Logo({ className }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className ?? ''}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- static svg, no optimization needed */}
-      <img src="/logo.svg" alt="" aria-hidden className="h-8 w-8 shrink-0" />
-      <span className="text-[16px] font-semibold leading-none tracking-[-0.02em] text-current">
+      <img src="/logo.svg" alt="" aria-hidden className="h-11 w-11 shrink-0" />
+      <span className="text-[19px] font-semibold leading-none tracking-[-0.02em] text-current">
         SecureVibe
       </span>
     </span>

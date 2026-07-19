@@ -619,7 +619,7 @@ export default function LandingPage() {
           <Reveal>
             <div className="mx-auto mb-8 w-fit">
               {/* eslint-disable-next-line @next/next/no-img-element -- static svg */}
-              <img src="/logo.svg" alt="" aria-hidden className="h-14 w-14" />
+              <img src="/logo.svg" alt="" aria-hidden className="h-24 w-24" />
             </div>
           </Reveal>
           <Reveal delay={80}>
