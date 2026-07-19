@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-paper text-ink">
 
       <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-paper/92 backdrop-blur-sm">
-        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-7 gap-y-2 px-4 py-3 sm:px-6">
+        <nav className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3.5 sm:px-8">
           <Link href="/dashboard" aria-label="SecureVibe dashboard">
             <Logo />
           </Link>

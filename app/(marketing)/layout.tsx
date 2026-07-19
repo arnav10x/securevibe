@@ -25,7 +25,7 @@ export default async function MarketingLayout({ children }: { children: ReactNod
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
       <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-paper/90 backdrop-blur-md">
-        <nav className="mx-auto flex max-w-6xl items-center gap-x-7 px-4 py-3 sm:px-6">
+        <nav className="mx-auto flex max-w-screen-2xl items-center gap-x-8 px-4 py-3.5 sm:px-8">
           <Link href="/" className="shrink-0" aria-label="SecureVibe home">
             <Logo />
           </Link>
