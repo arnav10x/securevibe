@@ -43,8 +43,8 @@ export default function ResetPasswordPage() {
 
   return (
     <Card>
-      <h1 className="mb-1 text-xl font-semibold tracking-tight text-fg">Choose a new password</h1>
-      <p className="mb-6 text-sm text-fg-dim">You&apos;ll be signed in right after.</p>
+      <h1 className="mb-1 display text-2xl text-ink">Choose a new password</h1>
+      <p className="mb-6 text-sm text-ink-soft">You&apos;ll be signed in right after.</p>
 
       {error && (
         <div className="mb-4">

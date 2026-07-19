@@ -15,41 +15,65 @@ export default function GlobalError({ reset }: { error: Error; reset: () => void
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#060a09',
-          color: '#eaf4ef',
+          background: '#f6f6f4',
+          color: '#131313',
           fontFamily: 'system-ui, sans-serif',
           textAlign: 'center',
           padding: '1rem',
+          borderTop: '4px solid #131313',
         }}
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="48"
-          height="48"
-          fill="none"
-          stroke="#36e2a8"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
+        <span
+          style={{
+            fontFamily: 'ui-monospace, monospace',
+            fontWeight: 700,
+            fontSize: '0.9rem',
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: '#a02019',
+            border: '1px solid #a02019',
+            borderRadius: '999px',
+            padding: '0.3em 0.75em',
+            transform: 'rotate(-1.5deg)',
+          }}
         >
-          <path d="M10.3 4.1 3.05 16.65c-.75 1.3.2 2.95 1.7 2.95h14.5c1.5 0 2.45-1.65 1.7-2.95L13.7 4.1a1.95 1.95 0 0 0-3.4 0Z" />
-          <path d="M12 9.25v4M12 16.4v.1" />
-        </svg>
-        <h1 style={{ marginTop: '1.5rem' }}>Something went badly wrong</h1>
-        <p style={{ color: '#9db4ab', maxWidth: '24rem' }}>
+          Incident report
+        </span>
+        <h1
+          style={{
+            marginTop: '1.75rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.02em',
+          }}
+        >
+          Something went badly wrong
+        </h1>
+        <p
+          style={{
+            color: '#545454',
+            maxWidth: '24rem',
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '0.95rem',
+          }}
+        >
           The app hit an unexpected error. Reloading usually fixes it.
         </p>
         <button
           onClick={reset}
           style={{
             marginTop: '1.5rem',
-            padding: '0.6rem 1.4rem',
-            borderRadius: '9999px',
-            border: 'none',
-            background: '#36e2a8',
-            color: '#060a09',
+            padding: '0.6rem 1.5rem',
+            border: '1px solid #131313',
+            borderRadius: '999px',
+            background: '#131313',
+            color: '#f6f6f4',
+            fontFamily: 'ui-monospace, monospace',
             fontWeight: 600,
+            fontSize: '0.8rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            boxShadow: '0 8px 20px -8px rgba(19,19,19,0.5)',
             cursor: 'pointer',
           }}
         >

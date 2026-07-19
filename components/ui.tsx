@@ -1,4 +1,4 @@
-// Shared UI primitives, restyled for the "Obsidian Signal" system.
+// Shared UI primitives, set in the "Intaglio" system.
 // Same component API as before — every page that imports these gets the
 // new look for free. One place to restyle, still deliberately small.
 
@@ -11,59 +11,61 @@ function cx(...classes: (string | false | undefined)[]) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Buttons — pill-shaped; primary carries the phosphor signal          */
+/*  Buttons — minted pills. The primary is the ink die that strikes    */
+/*  verdant under the pointer; a small mint mark lights up with it.    */
 /* ------------------------------------------------------------------ */
 
 const buttonBase =
-  'inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold ' +
-  'transition-all duration-200 cursor-pointer select-none ' +
-  'active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100';
+  'ctl inline-flex items-center justify-center gap-2.5 px-5 py-2.5 ' +
+  'text-[14px] font-semibold tracking-[-0.01em] ' +
+  'cursor-pointer select-none ' +
+  'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:transform-none';
 
 const buttonStyles = {
-  primary: cx(
-    'btn-shine text-ink',
-    'bg-[linear-gradient(120deg,#7cf5cb,#36e2a8_45%,#19c78d)]',
-    'shadow-[0_0_24px_rgba(54,226,168,0.35),inset_0_1px_0_rgba(255,255,255,0.4)]',
-    'hover:shadow-[0_0_38px_rgba(54,226,168,0.55),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px',
-  ),
-  secondary: cx(
-    'glass text-fg rounded-full',
-    'hover:border-[var(--line-strong)] hover:-translate-y-px hover:bg-ink-700/60',
-  ),
-  danger: cx(
-    'border border-critical/40 bg-critical/10 text-[#ffb3b3]',
-    'hover:bg-critical/20 hover:border-critical/60',
-  ),
+  primary: 'ctl-primary',
+  secondary: 'ctl-secondary',
+  danger: 'ctl-danger',
 } as const;
 
 export function Button({
   variant = 'primary',
   className,
+  children,
   ...props
 }: ComponentProps<'button'> & { variant?: keyof typeof buttonStyles }) {
-  return <button className={cx(buttonBase, buttonStyles[variant], className)} {...props} />;
+  return (
+    <button className={cx(buttonBase, buttonStyles[variant], className)} {...props}>
+      {children}
+    </button>
+  );
 }
 
 export function ButtonLink({
   variant = 'primary',
   className,
+  children,
   ...props
 }: ComponentProps<typeof Link> & { variant?: keyof typeof buttonStyles }) {
-  return <Link className={cx(buttonBase, buttonStyles[variant], className)} {...props} />;
+  return (
+    <Link className={cx(buttonBase, buttonStyles[variant], className)} {...props}>
+      {children}
+    </Link>
+  );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Form controls                                                      */
+/*  Form controls — ruled entries in the ledger                        */
 /* ------------------------------------------------------------------ */
 
 export function Input({ className, ...props }: ComponentProps<'input'>) {
   return (
     <input
       className={cx(
-        'w-full rounded-xl border border-[var(--line)] bg-ink-800/70 px-4 py-2.5 text-[0.9375rem] text-fg',
-        'placeholder:text-fg-mute transition-colors duration-200',
-        'hover:border-[var(--line-strong)]',
-        'focus:border-signal/60 focus:outline-none focus:ring-2 focus:ring-signal/25',
+        'w-full rounded-xl border border-[var(--line-strong)] bg-sheet px-3.5 py-2.5',
+        'text-[0.9375rem] text-ink placeholder:text-ink-mute',
+        'transition-colors duration-150',
+        'hover:border-ink/50',
+        'focus:border-verdant focus:outline-none focus:ring-2 focus:ring-verdant/25',
         className,
       )}
       {...props}
@@ -75,7 +77,7 @@ export function Label({ className, ...props }: ComponentProps<'label'>) {
   return (
     <label
       className={cx(
-        'mb-2 block font-mono text-[11px] uppercase tracking-[0.16em] text-fg-dim',
+        'mb-2 block font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-ink-soft',
         className,
       )}
       {...props}
@@ -88,11 +90,11 @@ export function Label({ className, ...props }: ComponentProps<'label'>) {
 /* ------------------------------------------------------------------ */
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx('glass rounded-2xl p-6', className)}>{children}</div>;
+  return <div className={cx('plate p-6', className)}>{children}</div>;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Feedback                                                           */
+/*  Feedback — margin annotations with a colored rule down the left    */
 /* ------------------------------------------------------------------ */
 
 export function Alert({
@@ -104,15 +106,15 @@ export function Alert({
 }) {
   const tones = {
     error: {
-      classes: 'border-critical/40 bg-critical/10 text-[#ffc4c4]',
-      icon: <IconAlertTriangle className="h-4 w-4 shrink-0 text-critical" />,
+      classes: 'border-l-signal text-ink',
+      icon: <IconAlertTriangle className="h-4 w-4 shrink-0 text-signal-ink" />,
     },
     success: {
-      classes: 'border-signal/40 bg-signal/10 text-signal-bright',
-      icon: <IconCheck className="h-4 w-4 shrink-0 text-signal" />,
+      classes: 'border-l-safe text-ink',
+      icon: <IconCheck className="h-4 w-4 shrink-0 text-safe" />,
     },
     info: {
-      classes: 'border-low/40 bg-low/10 text-[#c3ddff]',
+      classes: 'border-l-low text-ink',
       icon: <IconSparkle className="h-4 w-4 shrink-0 text-low" />,
     },
   } as const;
@@ -120,7 +122,8 @@ export function Alert({
     <div
       role="alert"
       className={cx(
-        'flex items-start gap-3 rounded-xl border px-4 py-3 text-sm leading-relaxed',
+        'flex items-start gap-3 rounded-lg border border-[var(--line)] border-l-[3px]',
+        'bg-sheet px-4 py-3 text-sm leading-relaxed',
         tones[tone].classes,
       )}
     >
@@ -131,27 +134,28 @@ export function Alert({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Severity — the report's visual language                            */
+/*  Severity — archival ink grades                                     */
 /* ------------------------------------------------------------------ */
 
-const severityStyles: Record<string, { chip: string; dot: string }> = {
-  critical: { chip: 'bg-critical/12 text-critical border-critical/35', dot: 'bg-critical' },
-  high: { chip: 'bg-high/12 text-high border-high/35', dot: 'bg-high' },
-  medium: { chip: 'bg-medium/12 text-medium border-medium/35', dot: 'bg-medium' },
-  low: { chip: 'bg-low/12 text-low border-low/35', dot: 'bg-low' },
+const severityColor: Record<string, string> = {
+  critical: 'var(--color-critical)',
+  high: 'var(--color-high)',
+  medium: 'var(--color-medium)',
+  low: 'var(--color-low)',
 };
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  const style = severityStyles[severity] ?? severityStyles.low;
+  const color = severityColor[severity] ?? severityColor.low;
   return (
     <span
-      className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5',
-        'font-mono text-[10px] font-semibold uppercase tracking-[0.14em]',
-        style.chip,
-      )}
+      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-px font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
+      style={{
+        color,
+        borderColor: `color-mix(in srgb, ${color} 55%, transparent)`,
+        background: `color-mix(in srgb, ${color} 7%, transparent)`,
+      }}
     >
-      <span className={cx('h-1.5 w-1.5 rounded-full', style.dot)} aria-hidden />
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
       {severity}
     </span>
   );

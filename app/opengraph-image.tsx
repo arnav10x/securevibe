@@ -1,12 +1,17 @@
 // Social share card, rendered at request time by Next's built-in OG engine.
-// Mirrors the site's "Obsidian Signal" identity: obsidian field, phosphor
-// accent, shield-waveform mark.
+// Mirrors the monochrome "Oryn" identity: paper white, near-black ink,
+// grays, one clean grotesk (the engine's default sans stands in).
 
 import { ImageResponse } from 'next/og';
 
 export const alt = 'SecureVibe — security checkup for AI-built apps';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
+
+const paper = '#f6f6f4';
+const ink = '#131313';
+const inkSoft = '#545454';
+const inkMute = '#757575';
 
 export default function OpengraphImage() {
   return new ImageResponse(
@@ -17,50 +22,125 @@ export default function OpengraphImage() {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
-          padding: '80px',
-          background:
-            'radial-gradient(80% 90% at 80% 0%, rgba(54,226,168,0.16), transparent 60%), #060a09',
-          color: '#eaf4ef',
-          fontSize: 64,
-          fontWeight: 700,
+          background: paper,
+          color: ink,
+          padding: '64px 80px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <svg
-            viewBox="0 0 24 24"
-            width="52"
-            height="52"
-            fill="none"
-            stroke="#36e2a8"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 2.75 19.25 5.6v5.15c0 4.8-2.9 8.5-7.25 10.5-4.35-2-7.25-5.7-7.25-10.5V5.6L12 2.75Z" />
-            <path d="M8.75 10.75v2.5" />
-            <path d="M12 8.5v7" />
-            <path d="M15.25 10.25v3.5" />
-          </svg>
-          <span style={{ fontSize: 44 }}>
-            Secure<span style={{ color: '#36e2a8' }}>Vibe</span>
-          </span>
-        </div>
-        <div style={{ marginTop: 48, lineHeight: 1.12, letterSpacing: '-0.03em' }}>
-          Your AI built the app.
-        </div>
+        {/* Hairline frame */}
         <div
           style={{
-            color: '#7cf5cb',
-            lineHeight: 1.12,
-            letterSpacing: '-0.03em',
-            fontStyle: 'italic',
-            fontWeight: 400,
+            position: 'absolute',
+            top: 28,
+            left: 28,
+            right: 28,
+            bottom: 28,
+            border: '1px solid rgba(19,19,19,0.18)',
+            borderRadius: 20,
+          }}
+        />
+
+        {/* Masthead row */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
           }}
         >
-          Did it build it safely?
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            <svg
+              viewBox="0 0 24 24"
+              width="56"
+              height="56"
+              fill="none"
+              stroke={ink}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2.75 20 7.25v9.5L12 21.25 4 16.75v-9.5L12 2.75Z" />
+              <path d="M12 7.25 16 9.5v5L12 16.75 8 14.5v-5l4-2.25Z" />
+            </svg>
+            <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: -1.5 }}>
+              SecureVibe
+            </span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              border: `2px solid ${ink}`,
+              color: ink,
+              borderRadius: 999,
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: 2,
+              textTransform: 'uppercase',
+              padding: '12px 26px',
+            }}
+          >
+            Code deleted after scan
+          </div>
         </div>
-        <div style={{ marginTop: 44, fontSize: 27, fontWeight: 400, color: '#9db4ab' }}>
+
+        {/* Section label */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            marginTop: 84,
+            fontSize: 22,
+            letterSpacing: 5,
+            textTransform: 'uppercase',
+            color: inkMute,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              width: 10,
+              height: 10,
+              borderRadius: 999,
+              background: ink,
+            }}
+          />
+          Security scans · for AI-built apps
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', marginTop: 24 }}>
+          <div
+            style={{
+              fontSize: 92,
+              fontWeight: 700,
+              letterSpacing: -4,
+              lineHeight: 1.05,
+            }}
+          >
+            Your AI built the app.
+          </div>
+          <div
+            style={{
+              fontSize: 92,
+              fontWeight: 700,
+              letterSpacing: -4,
+              lineHeight: 1.05,
+              color: inkMute,
+            }}
+          >
+            Did it build it safely?
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 'auto',
+            fontSize: 27,
+            color: inkSoft,
+            display: 'flex',
+          }}
+        >
           Secrets · Open databases · Fake dependencies · Insecure code — checked in a minute.
         </div>
       </div>

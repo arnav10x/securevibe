@@ -46,19 +46,19 @@ export default function SignupPage() {
   if (sent) {
     return (
       <Card>
-        <h1 className="mb-3 flex items-center gap-2.5 text-xl font-semibold tracking-tight text-fg">
-          <span className="grid h-8 w-8 place-items-center rounded-lg border border-signal/30 bg-signal/10 text-signal">
+        <h1 className="mb-3 flex items-center gap-2.5 display text-2xl text-ink">
+          <span className="grid h-8 w-8 place-items-center rounded-2xl border-[1.5px] border-ink/40 text-ink">
             <IconMail className="h-4 w-4" />
           </span>
           Check your email
         </h1>
-        <p className="text-sm leading-relaxed text-fg-dim">
-          We sent a verification link to <strong className="text-fg">{email}</strong>.
+        <p className="text-sm leading-relaxed text-ink-soft">
+          We sent a verification link to <strong className="text-ink">{email}</strong>.
           Click it to activate your account, then sign in.
         </p>
-        <p className="mt-4 text-sm text-fg-dim">
+        <p className="mt-4 text-sm text-ink-soft">
           Nothing arriving? Check spam, or{' '}
-          <button onClick={() => setSent(false)} className="text-signal transition-colors hover:text-signal-bright">
+          <button onClick={() => setSent(false)} className="u-link text-verdant-ink">
             try again
           </button>
           .
@@ -69,8 +69,8 @@ export default function SignupPage() {
 
   return (
     <Card>
-      <h1 className="mb-1 text-xl font-semibold tracking-tight text-fg">Create your account</h1>
-      <p className="mb-6 text-sm text-fg-dim">
+      <h1 className="mb-1 display text-2xl text-ink">Create your account</h1>
+      <p className="mb-6 text-sm text-ink-soft">
         Free plan: 3 security scans a month. No credit card needed.
       </p>
 
@@ -103,26 +103,26 @@ export default function SignupPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <p className="mt-1.5 text-xs text-fg-mute">At least 8 characters.</p>
+          <p className="mt-1.5 text-xs text-ink-mute">At least 8 characters.</p>
         </div>
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? 'Creating account…' : 'Create account'}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-fg-dim">
+      <p className="mt-6 text-center text-sm text-ink-soft">
         Already have an account?{' '}
-        <Link href="/login" className="text-signal transition-colors hover:text-signal-bright">
+        <Link href="/login" className="u-link text-verdant-ink">
           Sign in
         </Link>
       </p>
-      <p className="mt-4 text-center text-xs leading-relaxed text-fg-mute">
+      <p className="mt-4 text-center text-xs leading-relaxed text-ink-mute">
         By signing up you agree to our{' '}
-        <Link href="/terms" className="underline transition-colors hover:text-fg-dim">
+        <Link href="/terms" className="underline transition-colors hover:text-ink-soft">
           Terms
         </Link>{' '}
         and{' '}
-        <Link href="/privacy" className="underline transition-colors hover:text-fg-dim">
+        <Link href="/privacy" className="underline transition-colors hover:text-ink-soft">
           Privacy Policy
         </Link>
         .

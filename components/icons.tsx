@@ -1,5 +1,5 @@
-// SecureVibe icon set — one hand-drawn family so every glyph shares the
-// same stroke weight (1.5), rounded caps, and 24px grid. No emoji anywhere:
+// SecureVibe icon set — one drafted family so every glyph shares the same
+// stroke weight (1.5), rounded caps, and 24px grid. No emoji anywhere:
 // these scale crisply, inherit currentColor, and look intentional.
 
 import type { ComponentProps } from 'react';
@@ -28,32 +28,41 @@ function Base({ children, ...props }: IconProps) {
 /*  Brand                                                              */
 /* ------------------------------------------------------------------ */
 
-// The mark: a shield holding a waveform — security wrapped around a vibe.
+// The mark: a shield sighted in a reticle — the app under inspection.
+// Four registration ticks + the shield + the scan line through it.
 export function LogoMark(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      {/* Registration ticks */}
       <path
-        d="M12 2.75 19.25 5.6v5.15c0 4.8-2.9 8.5-7.25 10.5-4.35-2-7.25-5.7-7.25-10.5V5.6L12 2.75Z"
+        d="M12 1v2.4M12 20.6V23M1 12h2.4M20.6 12H23"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      {/* The shield */}
+      <path
+        d="M12 4.4 17.9 6.7v4.2c0 3.9-2.36 6.9-5.9 8.5-3.54-1.6-5.9-4.6-5.9-8.5V6.7L12 4.4Z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
-      <path d="M8.75 10.75v2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M12 8.5v7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M15.25 10.25v3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      {/* The scan line crossing it */}
+      <path d="M8.4 12h7.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
 
-// Logo lockup: mark + wordmark, used in navs and footers.
+// Logo lockup: the founder's emblem — a starburst rosette in nested
+// hexagonal shields (public/logo.svg) — beside the wordmark in the
+// house grotesk.
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className ?? ''}`}>
-      <span className="grid h-8 w-8 place-items-center rounded-[10px] border border-[var(--line-strong)] bg-ink-800 text-signal shadow-[0_0_18px_rgba(54,226,168,0.18)]">
-        <LogoMark className="h-[18px] w-[18px]" />
-      </span>
-      <span className="text-[1.05rem] font-semibold tracking-tight text-fg">
-        Secure<span className="text-signal">Vibe</span>
+      {/* eslint-disable-next-line @next/next/no-img-element -- static svg, no optimization needed */}
+      <img src="/logo.svg" alt="" aria-hidden className="h-8 w-8 shrink-0" />
+      <span className="text-[16px] font-semibold leading-none tracking-[-0.02em] text-current">
+        SecureVibe
       </span>
     </span>
   );
@@ -118,6 +127,15 @@ export function IconScan(props: IconProps) {
     <Base {...props}>
       <path d="M3.75 8V5.75C3.75 4.6 4.6 3.75 5.75 3.75H8M16 3.75h2.25c1.15 0 2 .85 2 2V8M20.25 16v2.25c0 1.15-.85 2-2 2H16M8 20.25H5.75c-1.15 0-2-.85-2-2V16" />
       <path d="M3.75 12h16.5" />
+    </Base>
+  );
+}
+
+export function IconCrosshair(props: IconProps) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12" r="7.25" />
+      <path d="M12 2.75v4M12 17.25v4M2.75 12h4M17.25 12h4" />
     </Base>
   );
 }

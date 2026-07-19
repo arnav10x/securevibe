@@ -8,48 +8,48 @@ import {
   IconArrowUpRight,
   IconCheck,
   IconClock,
+  IconCrosshair,
   IconGitHub,
   IconAlertTriangle,
   IconPlus,
-  IconScan,
   IconSparkle,
 } from '@/components/icons';
 
 export const metadata = { title: 'Dashboard' };
 
-// Status → label + glyph, all drawn from the severity/signal palette.
+// Status → a small placard, set like everything else in instrument caps.
 function StatusChip({ status }: { status: string }) {
   const styles: Record<string, { label: string; classes: string; icon: ReactNode }> = {
     queued: {
       label: 'Queued',
-      classes: 'text-fg-mute border-[var(--line)]',
-      icon: <IconClock className="h-3.5 w-3.5" />,
+      classes: 'text-ink-mute border-[var(--line-strong)]',
+      icon: <IconClock className="h-3 w-3" />,
     },
     running: {
-      label: 'Scanning…',
-      classes: 'text-signal border-signal/30 bg-signal/10',
+      label: 'Scanning',
+      classes: 'text-verdant-ink border-verdant/60',
       icon: (
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-signal opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-signal" />
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full bg-verdant [animation:ping-square_1.4s_ease-out_infinite]" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-verdant" />
         </span>
       ),
     },
     completed: {
-      label: 'Completed',
-      classes: 'text-fg-dim border-[var(--line)]',
-      icon: <IconCheck className="h-3.5 w-3.5 text-signal" />,
+      label: 'Report ready',
+      classes: 'text-safe border-safe/60',
+      icon: <IconCheck className="h-3 w-3" />,
     },
     failed: {
       label: 'Failed',
-      classes: 'text-high border-high/30 bg-high/10',
-      icon: <IconAlertTriangle className="h-3.5 w-3.5" />,
+      classes: 'text-high border-high/60',
+      icon: <IconAlertTriangle className="h-3 w-3" />,
     },
   };
   const s = styles[status] ?? styles.queued;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${s.classes}`}
+      className={`inline-flex items-center gap-1.5 border-[1.5px] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${s.classes}`}
     >
       {s.icon}
       {s.label}
@@ -80,7 +80,6 @@ export default async function DashboardPage() {
   const plan = profile?.plan ?? 'free';
   const used = usedThisMonth ?? 0;
   const outOfScans = plan === 'free' && used >= FREE_SCANS_PER_MONTH;
-  const quotaPct = Math.min((used / FREE_SCANS_PER_MONTH) * 100, 100);
 
   // Findings counts per scan for the severity chips.
   const scanIds = (scans ?? []).map((s) => s.id);
@@ -101,30 +100,35 @@ export default async function DashboardPage() {
     <div>
       <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="kicker">Command deck</p>
-          <h1 className="display mt-2 text-3xl">Your scans</h1>
-          <div className="mt-3 text-sm text-fg-dim">
+          <p className="label">Scan log</p>
+          <h1 className="display mt-3 text-3xl">Your scans</h1>
+          <div className="mt-3.5 text-sm text-ink-soft">
             {plan === 'pro' ? (
-              <p>
-                <span className="mr-2 rounded-full border border-signal/30 bg-signal/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-signal">
+              <p className="flex items-center gap-2.5">
+                <span className="border-[1.5px] border-safe/60 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-safe">
                   Pro
                 </span>
                 Unlimited scans · {used} run this month
               </p>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span>
                   Free plan — {used} of {FREE_SCANS_PER_MONTH} scans used this month
                 </span>
+                {/* Quota as fuel cells, spent left to right */}
                 <span
-                  className="h-1.5 w-24 overflow-hidden rounded-full bg-ink-700"
+                  className="flex gap-1"
                   role="img"
                   aria-label={`${used} of ${FREE_SCANS_PER_MONTH} free scans used`}
                 >
-                  <span
-                    className="block h-full rounded-full bg-gradient-to-r from-signal-deep to-signal transition-[width] duration-700"
-                    style={{ width: `${quotaPct}%` }}
-                  />
+                  {Array.from({ length: FREE_SCANS_PER_MONTH }, (_, i) => (
+                    <span
+                      key={i}
+                      className={`h-3 w-4 rounded-sm border border-ink/60 ${
+                        i < used ? 'bg-ink' : 'bg-sheet'
+                      }`}
+                    />
+                  ))}
                 </span>
               </div>
             )}
@@ -136,13 +140,10 @@ export default async function DashboardPage() {
       </div>
 
       {outOfScans && (
-        <Card className="mb-6 border-signal/30">
-          <p className="text-sm leading-relaxed text-fg-dim">
+        <Card className="mb-6 border-l-[3px] border-l-signal">
+          <p className="text-sm leading-relaxed text-ink-soft">
             You&apos;ve used all {FREE_SCANS_PER_MONTH} free scans this month.{' '}
-            <Link
-              href="/account"
-              className="font-semibold text-signal transition-colors hover:text-signal-bright"
-            >
+            <Link href="/account" className="u-link font-semibold text-verdant-ink">
               Upgrade to Pro
             </Link>{' '}
             for unlimited scans, or come back on the 1st.
@@ -152,67 +153,72 @@ export default async function DashboardPage() {
 
       {(scans ?? []).length === 0 ? (
         <Card className="py-14 text-center">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-signal/25 bg-signal/10 text-signal shadow-[0_0_32px_rgba(54,226,168,0.2)]">
-            <IconScan className="h-7 w-7" />
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border-[1.5px] border-ink/40 text-ink">
+            <IconCrosshair className="h-7 w-7" />
           </span>
-          <h2 className="mt-5 text-xl font-semibold tracking-tight">No scans yet</h2>
-          <p className="mx-auto mt-2.5 max-w-md text-sm leading-relaxed text-fg-dim">
+          <h2 className="display mt-6 text-2xl">No scans on record</h2>
+          <p className="prose-serif mx-auto mt-3 max-w-md text-[15px] text-ink-soft">
             Point SecureVibe at a public GitHub repo or upload a zip of your project, and get a
             plain-English security report in about a minute.
           </p>
-          <div className="mt-6">
+          <div className="mt-6 flex justify-center">
             <ButtonLink href="/scans/new">Run your first scan</ButtonLink>
           </div>
         </Card>
       ) : (
-        <ul className="space-y-3">
-          {(scans ?? []).map((scan) => {
-            const counts = severityByScan.get(scan.id) ?? {};
-            return (
-              <li key={scan.id}>
-                <Link
-                  href={`/scans/${scan.id}`}
-                  className="glass group block rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--line-strong)]"
-                >
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <span className="flex min-w-0 items-center gap-2.5 font-medium">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--line)] bg-ink-800 text-fg-dim">
-                        {scan.source_type === 'github' ? (
-                          <IconGitHub className="h-4 w-4" />
-                        ) : (
-                          <IconArchive className="h-4 w-4" />
-                        )}
+        <div className="plate overflow-hidden">
+          <ul className="divide-y divide-[var(--line)]">
+            {(scans ?? []).map((scan, idx) => {
+              const counts = severityByScan.get(scan.id) ?? {};
+              return (
+                <li key={scan.id}>
+                  <Link
+                    href={`/scans/${scan.id}`}
+                    className="group block px-4 py-4 transition-colors duration-150 hover:bg-paper sm:px-5"
+                  >
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <span className="mono-tight w-8 shrink-0 font-mono text-[11px] text-ink-mute tabular-nums">
+                        {String((scans ?? []).length - idx).padStart(2, '0')}
                       </span>
-                      <span className="truncate">{scan.source_ref}</span>
-                    </span>
-                    <StatusChip status={scan.status} />
-                    <span className="ml-auto flex items-center gap-2 font-mono text-xs text-fg-mute">
-                      {new Date(scan.created_at).toLocaleString()}
-                      <IconArrowUpRight className="h-3.5 w-3.5 text-signal opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-                    </span>
-                  </div>
-                  {scan.status === 'completed' && (
-                    <div className="mt-3.5 flex flex-wrap items-center gap-2 pl-[42px]">
-                      {(['critical', 'high', 'medium', 'low'] as const).map((sev) =>
-                        counts[sev] ? (
-                          <span key={sev} className="flex items-center gap-1.5 text-sm">
-                            <SeverityBadge severity={sev} />
-                            <span className="text-fg-dim">{counts[sev]}</span>
-                          </span>
-                        ) : null,
-                      )}
-                      {Object.keys(counts).length === 0 && (
-                        <span className="flex items-center gap-1.5 text-sm text-signal">
-                          <IconSparkle className="h-4 w-4" /> No issues found by our checks
+                      <span className="flex min-w-0 items-center gap-2.5 font-medium">
+                        <span className="shrink-0 text-ink-mute">
+                          {scan.source_type === 'github' ? (
+                            <IconGitHub className="h-4 w-4" />
+                          ) : (
+                            <IconArchive className="h-4 w-4" />
+                          )}
                         </span>
-                      )}
+                        <span className="truncate">{scan.source_ref}</span>
+                      </span>
+                      <StatusChip status={scan.status} />
+                      <span className="mono-tight ml-auto flex items-center gap-2 font-mono text-[11px] text-ink-mute">
+                        {new Date(scan.created_at).toLocaleString()}
+                        <IconArrowUpRight className="h-3.5 w-3.5 text-verdant-ink opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                      </span>
                     </div>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    {scan.status === 'completed' && (
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-12">
+                        {(['critical', 'high', 'medium', 'low'] as const).map((sev) =>
+                          counts[sev] ? (
+                            <span key={sev} className="flex items-center gap-1.5 text-sm">
+                              <SeverityBadge severity={sev} />
+                              <span className="text-ink-soft">{counts[sev]}</span>
+                            </span>
+                          ) : null,
+                        )}
+                        {Object.keys(counts).length === 0 && (
+                          <span className="flex items-center gap-1.5 text-sm text-safe">
+                            <IconSparkle className="h-4 w-4" /> No issues found by our checks
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </div>
   );
