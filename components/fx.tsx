@@ -377,12 +377,22 @@ export function Magnetic({
 }
 
 /* ------------------------------------------------------------------ */
-/*  ScrollRail — the altimeter down the right edge: one tick per       */
-/*  section, the active one extended in verdant. Click to jump.  */
+/*  ScrollRail — the index down the right edge: one tick per section,  */
+/*  the active one extended in ink. Click to jump. When a dark section */
+/*  (invertOn) passes behind the rail, it fades to its light scheme    */
+/*  so the ticks never vanish into the plate.                          */
 /* ------------------------------------------------------------------ */
 
-export function ScrollRail({ stops }: { stops: { id: string; label: string }[] }) {
+export function ScrollRail({
+  stops,
+  invertOn,
+}: {
+  stops: { id: string; label: string }[];
+  /** id of a dark section; while it crosses mid-viewport the rail inverts. */
+  invertOn?: string;
+}) {
   const [active, setActive] = useState(stops[0]?.id ?? '');
+  const [inverted, setInverted] = useState(false);
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
@@ -403,8 +413,38 @@ export function ScrollRail({ stops }: { stops: { id: string; label: string }[] }
     return () => observer.disconnect();
   }, [stops]);
 
+  useEffect(() => {
+    if (!invertOn) return;
+    const el = document.getElementById(invertOn);
+    if (!el) return;
+    // The rail hangs at mid-viewport, so invert exactly while the dark
+    // section occupies that band — the colors cross-fade via CSS.
+    // Plain scroll geometry, not IntersectionObserver: observer callbacks
+    // go silent in some embedded webviews (see watchInView above), and a
+    // wrong rail color is exactly the bug this exists to prevent.
+    let scheduled = false;
+    function check() {
+      scheduled = false;
+      const rect = el!.getBoundingClientRect();
+      const mid = window.innerHeight / 2;
+      setInverted(rect.top <= mid && rect.bottom >= mid);
+    }
+    function onScroll() {
+      if (scheduled) return;
+      scheduled = true;
+      setTimeout(check, 40);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    check();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [invertOn]);
+
   return (
-    <nav className="rail" aria-label="Page sections">
+    <nav className={`rail ${inverted ? 'rail--invert' : ''}`} aria-label="Page sections">
       {stops.map((stop) => (
         <button
           key={stop.id}

@@ -438,6 +438,15 @@ html.js [data-reveal].is-revealed {
   100% { opacity: 0; transform: scale(1.5); }
 }
 
+/* The auth-screen rose blooming in behind the card on first paint */
+.rose-enter {
+  animation: rose-enter 1.4s var(--ease-out-quart) both;
+}
+@keyframes rose-enter {
+  from { opacity: 0; transform: scale(0.9) rotate(-6deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
 /* ---------------------------------------------------------------- */
 /*  Scroll rail — the index down the right edge                      */
 /* ---------------------------------------------------------------- */
@@ -482,6 +491,14 @@ html.js [data-reveal].is-revealed {
 .rail-stop:hover .rail-label,
 .rail-stop.is-active .rail-label { opacity: 1; transform: none; }
 .rail-stop.is-active .rail-tick { width: 26px; background: var(--color-ink); }
+
+/* While a dark section crosses mid-viewport the rail flips to its
+   light scheme — a cross-fade, both colors transition. */
+.rail .rail-label { transition: opacity 200ms ease, transform 200ms var(--ease-out-quart), color 350ms ease; }
+.rail .rail-tick { transition: width 200ms var(--ease-out-quart), background-color 350ms ease; }
+.rail--invert .rail-tick { background: color-mix(in srgb, var(--color-bone) 45%, transparent); }
+.rail--invert .rail-stop.is-active .rail-tick { background: var(--color-bone); }
+.rail--invert .rail-label { color: color-mix(in srgb, var(--color-bone) 75%, transparent); }
 
 /* ---------------------------------------------------------------- */
 /*  Reduced motion: the document stands still                        */

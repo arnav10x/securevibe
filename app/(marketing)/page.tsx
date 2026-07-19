@@ -150,23 +150,23 @@ function SectionHead({ n, title, center }: { n: string; title: string; center?: 
 export default function LandingPage() {
   return (
     <div className="overflow-x-clip">
-      <ScrollRail stops={RAIL_STOPS} />
+      <ScrollRail stops={RAIL_STOPS} invertOn="promise" />
 
       {/* ================= Hero ================= */}
       <section id="top" className="relative overflow-hidden scroll-mt-24">
-        {/* The engraved rosette, turning slowly off the right edge */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-56 top-1/2 hidden h-[640px] w-[640px] -translate-y-1/2 md:block lg:-right-32"
-          style={{
-            maskImage: 'radial-gradient(closest-side, black 62%, transparent 98%)',
-          }}
-        >
-          <Guilloche parallax opacity={0.85} />
-        </div>
         <div aria-hidden className="graph graph--fade" />
 
         <div className="relative mx-auto w-full max-w-6xl px-4 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-24">
+          {/* The engraved rosette, turning whole in the open right half */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-10 top-1/2 hidden h-[540px] w-[540px] -translate-y-1/2 md:block xl:right-0"
+            style={{
+              maskImage: 'radial-gradient(closest-side, black 66%, transparent 100%)',
+            }}
+          >
+            <Guilloche parallax opacity={0.85} />
+          </div>
           <div className="max-w-3xl">
             <Reveal>
               <p className="label">Security clearance · for AI-built apps</p>
