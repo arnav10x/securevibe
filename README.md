@@ -34,7 +34,7 @@ npm test                     # run the test suite (incl. the deletion-guarantee 
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | everything | Supabase Dashboard → Project Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | everything | Same page → "publishable" key (`sb_publishable_…`). Safe to expose; RLS protects the data. |
-| `SUPABASE_SECRET_KEY` | billing, cron, package cache | Project Settings → API keys → create a **secret** key (`sb_secret_…`). Server-only — never expose. Scanning works without it; Stripe webhook/checkout and the cleanup cron do not. |
+| `SUPABASE_SECRET_KEY` | billing, cron, package cache, instant scans | Project Settings → API keys → create a **secret** key (`sb_secret_…`). Server-only — never expose. Signed-in scanning works without it; Stripe webhook/checkout, the cleanup cron, and the landing-page instant scan (anonymous teaser reports) do not. |
 | `NEXT_PUBLIC_APP_URL` | correct links/redirects | `http://localhost:3000` locally; your production URL after deploying (e.g. `https://securevibe.vercel.app`) |
 | `STRIPE_SECRET_KEY` | billing | [dashboard.stripe.com](https://dashboard.stripe.com) → Developers → API keys → Secret key. **Use test mode** (`sk_test_…`) until you're ready to charge for real. |
 | `STRIPE_PRICE_ID` | billing | Stripe → Product catalog → add product "SecureVibe Pro", recurring $9/month → copy the price ID (`price_…`) |

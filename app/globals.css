@@ -1,45 +1,60 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/*  SecureVibe design system — "Obsidian Signal"                       */
+/*  SecureVibe design system — "Oryn"                                  */
 /*                                                                     */
-/*  One idea drives everything: a dark obsidian field with a living    */
-/*  phosphor-green "signal" running through it. Surfaces are glass,    */
-/*  type is a precision grotesk with an editorial serif accent, and    */
-/*  data/labels are set in mono like instrument readouts.              */
+/*  Strict monochrome, in the register of the cleanest AI platforms:   */
+/*  paper white with a breath of grain, near-black ink, grays in       */
+/*  between, and nothing else. One clean grotesk. Pill controls.       */
+/*  The single flourish is the machine-turned guilloché rosette —      */
+/*  engraved hairline linework at the top and bottom of the page —     */
+/*  now drawn in graphite. Color appears only when it means something: */
+/*  green for cleared, red for hazard, the severity ladder for data.   */
 /* ------------------------------------------------------------------ */
 
 @theme {
-  /* Ink — the obsidian background scale (green-cast near-blacks) */
-  --color-ink: #060a09;
-  --color-ink-900: #0a1210;
-  --color-ink-800: #101b17;
-  --color-ink-700: #16241f;
+  /* Paper — 60%. Soft white with grain, never flat #fff page fields. */
+  --color-paper: #f6f6f4;  /* the page */
+  --color-sheet: #ffffff;  /* raised cards, forms, reports */
+  --color-well:  #ececea;  /* recessed wells: code readouts, inputs */
 
-  /* Text */
-  --color-fg: #eaf4ef;
-  --color-fg-dim: #9db4ab;
-  --color-fg-mute: #6b8279;
+  /* Ink — 30%. Near-black and its grays. */
+  --color-ink:      #131313;
+  --color-ink-soft: #545454;  /* secondary text */
+  --color-ink-mute: #757575;  /* tertiary text, captions */
 
-  /* Signal — the phosphor accent */
-  --color-signal: #36e2a8;
-  --color-signal-bright: #7cf5cb;
-  --color-signal-deep: #0fa47a;
+  /* The deep plate — inverted panels (scan console, the promise). */
+  --color-ultra:      #101012;  /* near-black surface */
+  --color-ultra-deep: #08080a;  /* its recessed wells */
+  --color-bone:       #ebebe9;  /* light ink printed on the deep plate */
 
-  /* Severity ladder */
-  --color-critical: #ff6b6b;
-  --color-high: #ffa25e;
-  --color-medium: #ffd36e;
-  --color-low: #7cb8ff;
+  /* Graphite accents — kept under the old token names so every page
+     that said "verdant" now simply says "ink". 10% = black, used well. */
+  --color-verdant:      #1f1f1f;
+  --color-verdant-ink:  #2e2e2e;
+  --color-verdant-soft: #a9a9a7;  /* gray accents on the deep plate */
 
-  /* Type */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Functional color ONLY. Green = cleared/deleted. Red = hazard. */
+  --color-safe:       #157a4e;
+  --color-signal:     #b3261e;
+  --color-signal-ink: #a02019;
+
+  /* Severity ladder — data colors, tuned for the light page */
+  --color-critical: #b3261e;
+  --color-high:     #8f5606;
+  --color-medium:   #6e6403;
+  --color-low:      #47608f;
+
+  /* Type — one grotesk, one mono */
+  --font-display: var(--font-inter), -apple-system, "SF Pro Display", ui-sans-serif, sans-serif;
+  --font-serif: var(--font-inter), -apple-system, ui-sans-serif, sans-serif;
+  --font-sans: var(--font-inter), -apple-system, ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
-  --font-display: var(--font-instrument-serif), Georgia, serif;
 
-  /* Motion — one rhythm shared by every animation */
-  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Motion — one shared rhythm */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-io-expo: cubic-bezier(0.87, 0, 0.13, 1);
+  --ease-thunk: cubic-bezier(0.22, 1.35, 0.36, 1);
 }
 
 /* ---------------------------------------------------------------- */
@@ -47,332 +62,461 @@
 /* ---------------------------------------------------------------- */
 
 :root {
-  --line: rgba(163, 190, 180, 0.13); /* hairline borders everywhere */
-  --line-strong: rgba(163, 190, 180, 0.28);
-  --glow: 0 0 24px rgba(54, 226, 168, 0.35);
+  /* Hairline rules — diluted ink on paper */
+  --line: color-mix(in srgb, var(--color-ink) 11%, transparent);
+  --line-strong: color-mix(in srgb, var(--color-ink) 24%, transparent);
+  /* Linework on the deep plate */
+  --line-bone: color-mix(in srgb, var(--color-bone) 18%, transparent);
+  /* The elevation scale: one hairline + one soft ambient, everywhere. */
+  --shadow-plate:
+    0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent),
+    0 10px 30px -14px color-mix(in srgb, var(--color-ink) 12%, transparent);
+  --shadow-plate-hover:
+    0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent),
+    0 16px 40px -16px color-mix(in srgb, var(--color-ink) 18%, transparent);
 }
 
 html {
   scroll-behavior: smooth;
-  background: var(--color-ink);
+  background: var(--color-paper);
 }
 
 body {
-  background: var(--color-ink);
-  color: var(--color-fg);
+  background: var(--color-paper);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgba(54, 226, 168, 0.28);
-  color: #eafff6;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
-/* Visible focus everywhere, on-brand */
 :focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
-/* Quiet scrollbar that matches the obsidian field */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(163, 190, 180, 0.25) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-ink) 25%, transparent) transparent;
 }
 
-/* ---------------------------------------------------------------- */
-/*  Typography helpers                                               */
-/* ---------------------------------------------------------------- */
-
-/* Mono "instrument label" used for section kickers and data readouts */
-.kicker {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--color-signal);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.kicker::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: var(--color-signal);
-  box-shadow: 0 0 10px rgba(54, 226, 168, 0.9);
-  animation: pulse-dot 2.4s ease-in-out infinite;
-}
-
-/* Big editorial headline: grotesk with an italic serif accent word */
-.display {
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
-  text-wrap: balance;
-}
-
-.display em,
-.serif-accent {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  color: var(--color-signal-bright);
-}
-
-.text-gradient {
-  background: linear-gradient(100deg, #eaf4ef 20%, #9db4ab 50%, #eaf4ef 80%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* ---------------------------------------------------------------- */
-/*  Surfaces                                                         */
-/* ---------------------------------------------------------------- */
-
-/* Glass panel: translucent surface + gradient hairline border */
-.glass {
-  position: relative;
-  background:
-    linear-gradient(160deg, rgba(22, 36, 31, 0.55), rgba(10, 18, 16, 0.65));
-  border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-/* Brighter top edge, like light catching the glass */
-.glass::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(234, 244, 239, 0.07), transparent 32%);
-}
-
-/* Faint blueprint grid used behind key sections */
-.grid-bg {
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 75%);
-}
-
-/* Film-grain overlay: keeps large dark areas from looking flat */
-.noise::after {
+/* Paper film: a fixed breath of grain so large flat fields feel like
+   stock, not vector void. */
+.film::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 70;
   pointer-events: none;
   opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* Spotlight card: a radial glow that follows the pointer.            */
-/* --mx / --my are set from JS (see components/fx.tsx).               */
-.spotlight {
-  position: relative;
-  overflow: hidden;
+/* Retired backdrop grid — kept as a no-op so existing markup is inert. */
+.graph { display: none; }
+.graph--fade { display: none; }
+
+/* ---------------------------------------------------------------- */
+/*  Typography                                                       */
+/* ---------------------------------------------------------------- */
+
+/* Display: the grotesk at poster weight, tightly tracked. The <em>
+   inside steps back to gray — the two-tone headline of the cleanest
+   platform sites. No italics, no serifs. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  text-wrap: balance;
 }
 
-.spotlight::after {
+.display em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--color-ink-mute);
+}
+
+/* Long-form copy — same face, opened up for reading.
+   (Class name kept from the previous system so pages restyle free.) */
+.prose-serif {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: -0.006em;
+}
+
+/* Ledger label: mono caps with a small ink point */
+.label {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--color-ink-mute);
+}
+.label::before {
   content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.4s var(--ease-out-soft);
-  background: radial-gradient(
-    340px circle at var(--mx, 50%) var(--my, 50%),
-    rgba(54, 226, 168, 0.09),
-    transparent 65%
-  );
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--color-ink);
+}
+.label--bare::before {
+  display: none;
+}
+.label--bone {
+  color: color-mix(in srgb, var(--color-bone) 75%, transparent);
+}
+.label--bone::before {
+  background: var(--color-bone);
 }
 
-.spotlight:hover::after {
-  opacity: 1;
-}
-
-/* Animated conic border for the "Pro" pricing card */
-@property --spin {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-.beam-border {
-  position: relative;
-}
-
-.beam-border::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: conic-gradient(
-    from var(--spin),
-    transparent 0%,
-    rgba(54, 226, 168, 0.9) 12%,
-    transparent 26%,
-    transparent 55%,
-    rgba(124, 245, 203, 0.5) 68%,
-    transparent 80%
-  );
-  /* Show only the ring: paint the gradient, then punch out the middle.
-     Only the -webkit- shorthand is used (it aliases the standard property
-     everywhere), and the composite declarations come last — any mask
-     shorthand after them would silently reset the compositing back to add. */
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
-  pointer-events: none;
-  animation: spin-border 6s linear infinite;
-}
-
-@keyframes spin-border {
-  to {
-    --spin: 360deg;
-  }
+/* Dense mono readouts (telemetry, ledgers) */
+.mono-tight {
+  font-variation-settings: "wdth" 84;
 }
 
 /* ---------------------------------------------------------------- */
-/*  Motion vocabulary                                                */
+/*  Rules & dividers                                                 */
 /* ---------------------------------------------------------------- */
 
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.8); }
+.rule-hair { border-top: 1px solid var(--line); }
+
+/* Section rule: a hairline with a short ink stub */
+.rule-index {
+  position: relative;
+  border-top: 1px solid var(--line);
+}
+.rule-index::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 48px;
+  height: 2px;
+  background: var(--color-ink);
+}
+.rule-index--center::before {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(26px); filter: blur(5px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+/* Section divider — a plain hairline now. (Name kept from the old
+   system where this was ornamental.) */
+.hazard-rule {
+  height: 1px;
+  background: var(--line);
 }
 
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+/* ---------------------------------------------------------------- */
+/*  Plates (cards)                                                   */
+/* ---------------------------------------------------------------- */
+
+.plate {
+  position: relative;
+  background: var(--color-sheet);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-plate);
+}
+.plate--plain { box-shadow: none; }
+
+/* The deep plate: near-black, for the scan console and the promise */
+.plate--ultra {
+  background:
+    radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--color-bone) 7%, transparent), transparent 55%),
+    var(--color-ultra);
+  border-color: color-mix(in srgb, var(--color-bone) 12%, transparent);
+  color: var(--color-bone);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-bone) 7%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-ink) 20%, transparent),
+    0 24px 50px -20px color-mix(in srgb, var(--color-ink) 40%, transparent);
 }
 
-@keyframes shine {
-  from { transform: translateX(-130%) skewX(-18deg); }
-  to { transform: translateX(230%) skewX(-18deg); }
+/* Recessed readout well — masked evidence, telemetry, code lines */
+.readout {
+  background: var(--color-well);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--color-ink);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--color-ink) 6%, transparent);
 }
 
-@keyframes float-soft {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+/* A leaked secret, redacted in the report */
+.redacted {
+  background: var(--color-ink);
+  color: color-mix(in srgb, var(--color-sheet) 72%, transparent);
+  padding: 0 0.4em;
+  border-radius: 3px;
+  text-decoration: line-through;
+  text-decoration-color: var(--color-signal);
+  text-decoration-thickness: 2px;
 }
 
-@keyframes beam-sweep {
-  0% { top: -12%; opacity: 0; }
-  8% { opacity: 1; }
-  86% { opacity: 1; }
-  100% { top: 104%; opacity: 0; }
+/* ---------------------------------------------------------------- */
+/*  Controls — black pills, pressed not glowing                      */
+/* ---------------------------------------------------------------- */
+
+.ctl {
+  position: relative;
+  border-radius: 999px;
+  transition:
+    transform 160ms var(--ease-out-quart),
+    background-color 160ms var(--ease-out-quart),
+    color 160ms var(--ease-out-quart),
+    border-color 160ms var(--ease-out-quart),
+    box-shadow 160ms var(--ease-out-quart);
+}
+.ctl:active { transform: translateY(1px) scale(0.99); }
+
+.ctl-primary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: 1px solid var(--color-ink);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-sheet) 14%, transparent),
+    0 8px 20px -8px color-mix(in srgb, var(--color-ink) 45%, transparent);
+}
+.ctl-primary:hover {
+  background: #2c2c2c;
+  border-color: #2c2c2c;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-sheet) 18%, transparent),
+    0 12px 26px -10px color-mix(in srgb, var(--color-ink) 50%, transparent);
+}
+.ctl-primary:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: inset 0 2px 4px color-mix(in srgb, #000 35%, transparent);
 }
 
-@keyframes blink-caret {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+.ctl-secondary {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--line-strong);
+}
+.ctl-secondary:hover {
+  background: var(--color-sheet);
+  border-color: color-mix(in srgb, var(--color-ink) 50%, transparent);
 }
 
-@keyframes draw-line {
-  to { stroke-dashoffset: 0; }
+.ctl-danger {
+  background: transparent;
+  color: var(--color-signal-ink);
+  border: 1px solid color-mix(in srgb, var(--color-signal) 50%, transparent);
+}
+.ctl-danger:hover {
+  background: color-mix(in srgb, var(--color-signal) 7%, transparent);
 }
 
-/* Scroll-reveal: elements start hidden ONLY when JS is running       */
-/* (the html.js class is added inline in the root layout), so the     */
-/* site stays fully readable without JavaScript.                      */
+/* Inline links: quiet underline that firms up on hover */
+.u-link {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  transition: color 150ms var(--ease-out-quart),
+    text-decoration-color 150ms var(--ease-out-quart);
+}
+.u-link:hover {
+  color: var(--color-ink);
+  text-decoration-color: currentColor;
+}
+
+/* ---------------------------------------------------------------- */
+/*  Chips & stamps                                                   */
+/* ---------------------------------------------------------------- */
+
+/* The status chip: a plain bordered pill, set straight. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-ink-soft);
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 999px;
+  padding: 0.4em 0.95em;
+}
+.tag--safe { color: var(--color-safe); }
+.tag--ink { color: var(--color-ink); }
+.tag--bone { color: var(--color-bone); }
+.tag--wax { color: var(--color-signal-ink); }
+
+.stamp-in {
+  animation: stamp-thunk 0.45s var(--ease-thunk) both;
+}
+@keyframes stamp-thunk {
+  0% { opacity: 0; transform: scale(1.6); }
+  60% { opacity: 1; transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ---------------------------------------------------------------- */
+/*  Pricing cards                                                    */
+/* ---------------------------------------------------------------- */
+
+.ticket {
+  position: relative;
+  background: var(--color-sheet);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-plate);
+}
+
+.ticket-perf {
+  border-top: 1px dashed var(--line-strong);
+}
+
+/* ---------------------------------------------------------------- */
+/*  Motion primitives                                                */
+/* ---------------------------------------------------------------- */
+
+/* Reveal: content settles onto the page. Only when JS is confirmed
+   running (html.js); otherwise everything is visible. */
 html.js [data-reveal] {
   opacity: 0;
-  transform: translateY(26px);
+  transform: translateY(16px);
   filter: blur(5px);
-  transition:
-    opacity 0.8s var(--ease-out-soft),
-    transform 0.8s var(--ease-out-soft),
-    filter 0.8s var(--ease-out-soft);
-  transition-delay: var(--reveal-delay, 0ms);
 }
-
-/* Promote to a GPU layer only while the entrance is still pending —
-   keeping will-change on dozens of settled elements wastes memory. */
-html.js [data-reveal]:not(.is-revealed) {
-  will-change: opacity, transform, filter;
-}
-
 html.js [data-reveal].is-revealed {
   opacity: 1;
-  transform: translateY(0);
-  filter: blur(0);
+  transform: none;
+  filter: none;
+  transition:
+    opacity 0.6s var(--ease-out-quart) var(--reveal-delay, 0ms),
+    transform 0.6s var(--ease-out-quart) var(--reveal-delay, 0ms),
+    filter 0.5s var(--ease-out-quart) var(--reveal-delay, 0ms);
 }
 
-/* Marquee track (duplicated content scrolls 50% then loops) */
-.marquee-track {
+/* The conveyor belt */
+.ticker { --gap: 0px; }
+.ticker-track {
   display: flex;
   width: max-content;
-  animation: marquee 36s linear infinite;
+  animation: ticker-scroll 32s linear infinite;
+}
+.ticker:hover .ticker-track { animation-play-state: paused; }
+@keyframes ticker-scroll {
+  to { transform: translateX(-50%); }
+}
+/* Soft fade at the belt's edges */
+.ticker--faded {
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
 }
 
-.marquee:hover .marquee-track {
-  animation-play-state: paused;
+/* Indeterminate scan bar */
+@keyframes scan-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
 }
 
-/* Primary-button shine sweep on hover */
-.btn-shine {
-  position: relative;
-  overflow: hidden;
+/* Slow float — drift, not bounce */
+@keyframes part-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(var(--drift, -6px)); }
 }
 
-.btn-shine::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 40%;
-  transform: translateX(-130%) skewX(-18deg);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+/* Radar ping for "running" states */
+@keyframes ping-square {
+  0% { opacity: 0.7; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(1.5); }
 }
 
-.btn-shine:hover::after {
-  animation: shine 0.9s var(--ease-out-soft);
+/* The auth-screen rose blooming in behind the card on first paint */
+.rose-enter {
+  animation: rose-enter 1.4s var(--ease-out-quart) both;
+}
+@keyframes rose-enter {
+  from { opacity: 0; transform: scale(0.9) rotate(-6deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
 /* ---------------------------------------------------------------- */
-/*  Reduced motion: everything settles instantly, nothing loops      */
+/*  Scroll rail — the index down the right edge                      */
+/* ---------------------------------------------------------------- */
+
+.rail {
+  position: fixed;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+}
+@media (min-width: 80rem) { .rail { display: flex; } }
+
+.rail-stop {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.rail-stop .rail-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ink-mute);
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 200ms ease, transform 200ms var(--ease-out-quart);
+}
+.rail-stop .rail-tick {
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-ink) 25%, transparent);
+  transition: width 200ms var(--ease-out-quart), background-color 200ms ease;
+}
+.rail-stop:hover .rail-label,
+.rail-stop.is-active .rail-label { opacity: 1; transform: none; }
+.rail-stop.is-active .rail-tick { width: 26px; background: var(--color-ink); }
+
+/* While a dark section crosses mid-viewport the rail flips to its
+   light scheme — a cross-fade, both colors transition. */
+.rail .rail-label { transition: opacity 200ms ease, transform 200ms var(--ease-out-quart), color 350ms ease; }
+.rail .rail-tick { transition: width 200ms var(--ease-out-quart), background-color 350ms ease; }
+.rail--invert .rail-tick { background: color-mix(in srgb, var(--color-bone) 45%, transparent); }
+.rail--invert .rail-stop.is-active .rail-tick { background: var(--color-bone); }
+.rail--invert .rail-label { color: color-mix(in srgb, var(--color-bone) 75%, transparent); }
+
+/* ---------------------------------------------------------------- */
+/*  Reduced motion: the document stands still                        */
 /* ---------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
+  html { scroll-behavior: auto; }
   html.js [data-reveal] {
     opacity: 1;
     transform: none;
     filter: none;
     transition: none;
   }
-
-  .kicker::before,
-  .marquee-track,
-  .beam-border::before {
-    animation: none;
-  }
-
+  .ticker-track { animation: none; flex-wrap: wrap; }
+  .stamp-in { animation: none; }
+  .ctl,
+  .ctl:hover,
+  .ctl:active { transform: none; }
   *,
   *::before,
   *::after {

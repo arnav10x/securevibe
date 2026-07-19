@@ -98,22 +98,23 @@ export default function NewScanPage() {
   if (phase === 'scanning') {
     return (
       <Card className="mx-auto max-w-xl py-14 text-center">
-        {/* Pulsing mark inside expanding rings — the scan heartbeat */}
         <div className="relative mx-auto h-20 w-20">
-          <span className="absolute inset-0 animate-ping rounded-2xl border border-signal/40 [animation-duration:2s]" />
-          <span className="absolute inset-0 grid place-items-center rounded-2xl border border-signal/40 bg-signal/10 text-signal shadow-[0_0_40px_rgba(54,226,168,0.35)]">
+          <span className="absolute inset-0 rounded-2xl border-[1.5px] border-verdant/60 [animation:ping-square_2s_ease-out_infinite]" />
+          <span className="absolute inset-0 grid place-items-center rounded-2xl border-[1.5px] border-ink/40 text-ink">
             <LogoMark className="h-9 w-9" />
           </span>
         </div>
-        <h1 className="mt-7 text-xl font-semibold tracking-tight">Scanning your code…</h1>
-        <p className="mx-auto mt-2.5 max-w-sm text-sm leading-relaxed text-fg-dim">
+        <p className="mx-auto mt-7 w-fit">
+          <span className="tag text-[11px]">Scan in progress</span>
+        </p>
+        <p className="prose-serif mx-auto mt-4 max-w-sm text-[15px] text-ink-soft">
           Checking for exposed secrets, database misconfigurations, risky dependencies and
           insecure code patterns. Bigger projects can take a minute or two — keep this tab open.
         </p>
-        <div className="mx-auto mt-7 h-1 w-56 overflow-hidden rounded-full bg-ink-700">
-          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-signal to-transparent [animation:marquee_1.4s_linear_infinite]" />
+        <div className="readout mx-auto mt-7 h-1.5 w-56 overflow-hidden border-0">
+          <div className="h-full w-1/4 bg-verdant [animation:scan-bar_1.6s_linear_infinite]" />
         </div>
-        <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.2em] text-fg-mute">
+        <p className="label label--bare mt-5 justify-center">
           Source deleted the moment the report is ready
         </p>
       </Card>
@@ -122,16 +123,16 @@ export default function NewScanPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <p className="kicker">New scan</p>
-      <h1 className="display mt-2 text-3xl">Point us at your code</h1>
-      <p className="mb-7 mt-3 text-sm leading-relaxed text-fg-dim">
+      <p className="label">New scan</p>
+      <h1 className="display mt-3 text-3xl">Point us at your code</h1>
+      <p className="prose-serif mb-7 mt-3.5 text-[15px] text-ink-soft">
         Your code is scanned in an isolated workspace and permanently deleted the moment the
         report is ready. We keep findings only — never your source.
       </p>
 
       <Card>
-        {/* Segmented source picker */}
-        <div className="mb-6 grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--line)] bg-ink p-1.5">
+        {/* Segmented source picker — a two-position switch */}
+        <div className="mb-6 grid grid-cols-2 gap-1 bg-well p-1">
           {(
             [
               ['github', 'Public GitHub repo', IconGitHub],
@@ -143,10 +144,10 @@ export default function NewScanPage() {
               type="button"
               onClick={() => setTab(value)}
               aria-pressed={tab === value}
-              className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+              className={`flex cursor-pointer items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                 tab === value
-                  ? 'border border-signal/30 bg-signal/10 text-signal-bright shadow-[0_0_20px_rgba(54,226,168,0.12)]'
-                  : 'border border-transparent text-fg-mute hover:text-fg-dim'
+                  ? 'border border-ink/70 bg-sheet text-ink shadow-[0_1px_2px_rgba(17,26,68,0.10)]'
+                  : 'border border-transparent text-ink-mute hover:text-ink-soft'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -164,7 +165,7 @@ export default function NewScanPage() {
           <div className="mb-4">
             <Alert tone="info">
               You&apos;ve used all 3 free scans this month.{' '}
-              <Link href="/account" className="font-semibold underline">
+              <Link href="/account" className="u-link font-semibold text-verdant-ink">
                 Upgrade to Pro ($9/month)
               </Link>{' '}
               for unlimited scans.
@@ -184,7 +185,7 @@ export default function NewScanPage() {
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
               />
-              <p className="mt-2 text-xs leading-relaxed text-fg-mute">
+              <p className="mt-2 text-xs leading-relaxed text-ink-mute">
                 Public repositories only (up to 50 MB). Private repo support is coming later.
               </p>
             </div>
@@ -199,23 +200,23 @@ export default function NewScanPage() {
                   const dropped = e.dataTransfer.files?.[0];
                   if (dropped) setFile(dropped);
                 }}
-                className={`group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-9 text-center transition-colors duration-200 ${
+                className={`group flex cursor-pointer flex-col items-center justify-center gap-2 border border-dashed px-4 py-9 text-center transition-colors duration-150 ${
                   file
-                    ? 'border-signal/40 bg-signal/5'
-                    : 'border-[var(--line-strong)] bg-ink hover:border-signal/40 hover:bg-signal/5'
+                    ? 'border-safe/70 bg-safe/5'
+                    : 'border-[var(--line-strong)] bg-well/50 hover:border-ink/60 hover:bg-well'
                 }`}
               >
-                <span className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] bg-ink-800 text-signal transition-transform duration-200 group-hover:-translate-y-0.5">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl border-[1.5px] border-ink/40 bg-sheet text-ink transition-transform duration-150 group-hover:-translate-y-0.5">
                   <IconUpload className="h-5 w-5" />
                 </span>
                 {file ? (
-                  <span className="text-sm font-medium text-signal-bright">{file.name}</span>
+                  <span className="text-sm font-medium text-safe">{file.name}</span>
                 ) : (
-                  <span className="text-sm text-fg-dim">
-                    <span className="font-medium text-fg">Choose a .zip</span> or drop it here
+                  <span className="text-sm text-ink-soft">
+                    <span className="font-medium text-ink">Choose a .zip</span> or drop it here
                   </span>
                 )}
-                <span className="text-xs text-fg-mute">
+                <span className="text-xs text-ink-mute">
                   Up to 50 MB — no need to include node_modules
                 </span>
               </label>
@@ -230,13 +231,13 @@ export default function NewScanPage() {
             </div>
           )}
 
-          <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-fg-dim">
+          <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-ink-soft">
             <input
               type="checkbox"
               required
               checked={rightsConfirmed}
               onChange={(e) => setRightsConfirmed(e.target.checked)}
-              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--line-strong)] bg-ink accent-[#36e2a8]"
+              className="mt-0.5 h-4 w-4 cursor-pointer border-[var(--line-strong)] bg-sheet accent-[#0b2fa3]"
             />
             <span>
               I have the right to submit this code for analysis (it&apos;s mine, or I&apos;m

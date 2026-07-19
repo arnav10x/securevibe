@@ -31,18 +31,18 @@ export default function ForgotPasswordPage() {
   if (sent) {
     return (
       <Card>
-        <h1 className="mb-3 flex items-center gap-2.5 text-xl font-semibold tracking-tight text-fg">
-          <span className="grid h-8 w-8 place-items-center rounded-lg border border-signal/30 bg-signal/10 text-signal">
+        <h1 className="mb-3 flex items-center gap-2.5 display text-2xl text-ink">
+          <span className="grid h-8 w-8 place-items-center border-[1.5px] border-ink/75 text-ink">
             <IconMail className="h-4 w-4" />
           </span>
           Check your email
         </h1>
-        <p className="text-sm leading-relaxed text-fg-dim">
-          If an account exists for <strong className="text-fg">{email}</strong>, we sent a
+        <p className="text-sm leading-relaxed text-ink-soft">
+          If an account exists for <strong className="text-ink">{email}</strong>, we sent a
           link to reset its password.
         </p>
-        <p className="mt-4 text-sm text-fg-dim">
-          <Link href="/login" className="text-signal transition-colors hover:text-signal-bright">
+        <p className="mt-4 text-sm text-ink-soft">
+          <Link href="/login" className="u-link text-verdant-ink">
             Back to sign in
           </Link>
         </p>
@@ -52,8 +52,8 @@ export default function ForgotPasswordPage() {
 
   return (
     <Card>
-      <h1 className="mb-1 text-xl font-semibold tracking-tight text-fg">Reset your password</h1>
-      <p className="mb-6 text-sm text-fg-dim">
+      <h1 className="mb-1 display text-2xl text-ink">Reset your password</h1>
+      <p className="mb-6 text-sm text-ink-soft">
         Enter your email and we&apos;ll send you a reset link.
       </p>
 
@@ -80,8 +80,8 @@ export default function ForgotPasswordPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-fg-dim">
-        <Link href="/login" className="text-signal transition-colors hover:text-signal-bright">
+      <p className="mt-6 text-center text-sm text-ink-soft">
+        <Link href="/login" className="u-link text-verdant-ink">
           Back to sign in
         </Link>
       </p>

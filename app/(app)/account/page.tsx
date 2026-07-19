@@ -37,8 +37,8 @@ export default async function AccountPage({
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <p className="kicker">Account</p>
-        <h1 className="display mt-2 text-3xl">Your account</h1>
+        <p className="label">Crew record</p>
+        <h1 className="display mt-3 text-3xl">Your account</h1>
       </div>
 
       {checkout === 'success' && (
@@ -49,17 +49,17 @@ export default async function AccountPage({
       )}
 
       <Card>
-        <h2 className="mb-4 text-lg font-semibold tracking-tight">Your plan</h2>
+        <h2 className="display mb-4 text-xl">Your plan</h2>
         <dl className="divide-y divide-[var(--line)] text-sm">
           <div className="flex justify-between gap-4 py-2.5">
-            <dt className="text-fg-mute">Email</dt>
+            <dt className="text-ink-mute">Email</dt>
             <dd className="truncate">{profile?.email ?? user!.email}</dd>
           </div>
           <div className="flex justify-between gap-4 py-2.5">
-            <dt className="text-fg-mute">Plan</dt>
+            <dt className="text-ink-mute">Plan</dt>
             <dd className="font-semibold">
               {plan === 'pro' ? (
-                <span className="rounded-full border border-signal/30 bg-signal/10 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-signal">
+                <span className="border-[1.5px] border-safe/60 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-safe">
                   Pro — unlimited scans
                 </span>
               ) : (
@@ -68,7 +68,7 @@ export default async function AccountPage({
             </dd>
           </div>
           <div className="flex justify-between gap-4 py-2.5">
-            <dt className="text-fg-mute">Scans this month</dt>
+            <dt className="text-ink-mute">Scans this month</dt>
             <dd className="tabular-nums">
               {usedThisMonth ?? 0}
               {plan === 'free' ? ` of ${FREE_SCANS_PER_MONTH}` : ''}
@@ -76,7 +76,7 @@ export default async function AccountPage({
           </div>
           {subscription?.current_period_end && (
             <div className="flex justify-between gap-4 py-2.5">
-              <dt className="text-fg-mute">
+              <dt className="text-ink-mute">
                 {subscription.cancel_at_period_end ? 'Pro ends' : 'Renews'}
               </dt>
               <dd>{new Date(subscription.current_period_end).toLocaleDateString()}</dd>
@@ -99,15 +99,12 @@ export default async function AccountPage({
       </Card>
 
       <Card>
-        <h2 className="mb-2 text-lg font-semibold tracking-tight">Your data</h2>
-        <p className="text-sm leading-relaxed text-fg-dim">
+        <h2 className="display mb-2 text-xl">Your data</h2>
+        <p className="prose-serif text-[15px] text-ink-soft">
           We never keep your source code — it is deleted the moment each scan finishes. Reports
           (findings only) stay until you delete them. To close your account and erase everything,
           email{' '}
-          <a
-            href="mailto:privacy@securevibe.app"
-            className="text-signal transition-colors hover:text-signal-bright hover:underline"
-          >
+          <a href="mailto:privacy@securevibe.app" className="u-link text-verdant-ink">
             privacy@securevibe.app
           </a>
           .
