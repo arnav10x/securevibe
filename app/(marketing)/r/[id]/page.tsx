@@ -13,8 +13,11 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { CLAIM_COOKIE, parseClaimCookie } from '@/lib/anon';
 import { claimScan, getPublicScan } from '@/lib/teaser';
+import type { ReportCard } from '@/lib/scanner/types';
 import { Alert, ButtonLink, Card, SeverityBadge } from '@/components/ui';
 import { AutoRefresh } from '@/components/auto-refresh';
+import { FindingsBrowser } from '@/components/findings-browser';
+import { ReportCardPlate } from '@/components/report-card';
 import { StampIn } from '@/components/fx';
 import { IconGitHub, IconLock, IconSparkle, LogoMark } from '@/components/icons';
 
@@ -28,6 +31,7 @@ const CHECK_NAMES: Record<string, string> = {
   platform_config: 'Platform config',
   dependency: 'Dependencies',
   insecure_pattern: 'Code patterns',
+  design: 'Design audit',
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -68,7 +72,12 @@ export default async function PreviewReportPage({
 
   const inFlight = scan.status === 'queued' || scan.status === 'running';
   const lockedCount = scan.locked.length;
-  const stats = scan.stats as { filesScanned?: number; durationMs?: number; packagesChecked?: number };
+  const stats = scan.stats as {
+    filesScanned?: number;
+    durationMs?: number;
+    packagesChecked?: number;
+    report?: ReportCard;
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -143,6 +152,9 @@ export default async function PreviewReportPage({
 
         {scan.status === 'completed' && (
           <>
+            {/* The grade is free — the reasons behind it are the product */}
+            {stats.report && <ReportCardPlate report={stats.report} />}
+
             {/* The tally — every severity counted, sealed or not */}
             <div className="plate flex flex-wrap divide-x divide-[var(--line)] px-2 py-4">
               {(['critical', 'high', 'medium', 'low'] as const).map((sev) => {
@@ -251,44 +263,13 @@ export default async function PreviewReportPage({
                     </p>
                   </div>
                 </div>
-                <div className="mt-5 space-y-4">
-                  {scan.unlocked.map((f) => (
-                    <div
-                      key={f.id}
-                      className="plate plate--plain p-6"
-                      style={{ borderLeft: `3px solid ${SEVERITY_COLOR[f.severity]}` }}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <h3 className="font-semibold tracking-tight text-ink">{f.title}</h3>
-                        <SeverityBadge severity={f.severity} />
-                      </div>
-                      {f.filePath && (
-                        <p className="mono-tight mt-1.5 font-mono text-xs text-ink-mute">
-                          {f.filePath}
-                          {f.lineStart ? `:${f.lineStart}` : ''}
-                        </p>
-                      )}
-                      {f.evidenceMasked && (
-                        <pre className="readout mt-4 overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-ink-soft">
-                          {f.evidenceMasked}
-                        </pre>
-                      )}
-                      <div className="mt-5 space-y-4 text-sm leading-relaxed">
-                        <div className="border-l-2 border-[var(--line-strong)] pl-4">
-                          <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-mute">
-                            Why this matters
-                          </p>
-                          <p className="prose-serif text-[15px] text-ink-soft">{f.explanation}</p>
-                        </div>
-                        <div className="border-l-2 border-safe/70 pl-4">
-                          <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-safe">
-                            How to fix it
-                          </p>
-                          <p className="prose-serif text-[15px] text-ink-soft">{f.recommendation}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="mt-4">
+                  <FindingsBrowser
+                    findings={scan.unlocked.map((f) => ({
+                      ...f,
+                      typeLabel: CHECK_NAMES[f.checkType] ?? f.checkType,
+                    }))}
+                  />
                 </div>
               </section>
             )}
@@ -300,7 +281,7 @@ export default async function PreviewReportPage({
                   <span className="tag tag--safe text-base">Clear · no findings</span>
                 </StampIn>
                 <p className="prose-serif mx-auto mt-6 max-w-lg text-[15px] text-ink-soft">
-                  None of our four checks flagged anything. Automated checks can&apos;t prove an
+                  None of our five checks flagged anything. Automated checks can&apos;t prove an
                   app is secure — this is a good sign, not a guarantee. Create a free account to
                   keep this report and re-scan after every change.
                 </p>

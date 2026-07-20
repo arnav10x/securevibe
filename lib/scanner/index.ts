@@ -14,6 +14,8 @@ import { checkSecretsInFile } from './checks/secrets';
 import { checkPlatformConfigInFile } from './checks/platform-config';
 import { checkCodePatternsInFile } from './checks/code-patterns';
 import { checkDependencies } from './checks/dependencies';
+import { DesignAnalyzer } from './checks/design';
+import { buildReportCard } from './grade';
 
 const SEVERITY_ORDER: Record<Severity, number> = {
   critical: 0,
@@ -40,6 +42,7 @@ export async function scanDirectory(
 
   const findings: Finding[] = [];
   const manifestContents: { file: (typeof walk.files)[number]; content: string }[] = [];
+  const design = new DesignAnalyzer();
   let filesScanned = 0;
   let skippedBinary = 0;
   let totalBytes = 0;
@@ -69,6 +72,7 @@ export async function scanDirectory(
     findings.push(...checkSecretsInFile(file.relPath, content));
     findings.push(...checkPlatformConfigInFile(file.relPath, content));
     findings.push(...checkCodePatternsInFile(file.relPath, content));
+    design.addFile(file.relPath, content);
 
     // Remember dependency manifests for the registry check below.
     const base = file.relPath.split('/').pop()?.toLowerCase() ?? '';
@@ -90,6 +94,10 @@ export async function scanDirectory(
     );
   }
 
+  const audit = design.finish();
+  findings.push(...audit.findings);
+  notes.push(...audit.notes);
+
   findings.sort((a, b) => {
     const bySeverity = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
     if (bySeverity !== 0) return bySeverity;
@@ -106,6 +114,7 @@ export async function scanDirectory(
       packagesChecked: deps.packagesChecked,
       packageLookupFailures: deps.lookupFailures,
       notes,
+      report: buildReportCard(findings, audit),
     },
   };
 }

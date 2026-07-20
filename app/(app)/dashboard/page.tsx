@@ -16,6 +16,7 @@ import {
   IconKey,
   IconLock,
   IconPlus,
+  IconLayout,
   IconScan,
   IconSparkle,
 } from '@/components/icons';
@@ -31,13 +32,14 @@ const SEVERITY_COLOR: Record<string, string> = {
   low: 'var(--color-low)',
 };
 
-// Every scan runs all four checks — shown so the product's breadth is
+// Every scan runs all five checks — shown so the product's breadth is
 // visible from the dashboard, not just from a finished report.
 const COVERAGE = [
   { icon: IconKey, name: 'Secrets', what: 'Exposed keys & credentials' },
   { icon: IconDatabase, name: 'Platform config', what: 'Open databases, RLS off' },
   { icon: IconBraces, name: 'Code patterns', what: 'Injection, eval, TLS off' },
   { icon: IconScan, name: 'Dependencies', what: 'Fake & risky packages' },
+  { icon: IconLayout, name: 'Design audit', what: 'Vibe tells, UX craft, repo grade' },
 ];
 
 // The launch drill: the habits that actually keep an AI-built app safe.
@@ -249,9 +251,9 @@ export default async function DashboardPage() {
           </StatTile>
           <StatTile
             label="Checks per scan"
-            foot="Secrets · config · patterns · dependencies"
+            foot="Secrets · config · patterns · dependencies · design"
           >
-            <span className="display text-3xl tabular-nums">4</span>
+            <span className="display text-3xl tabular-nums">5</span>
           </StatTile>
           <StatTile
             label="Your code we keep"
@@ -366,7 +368,7 @@ export default async function DashboardPage() {
         <div className="plate plate--plain p-6">
           <p className="label label--bare">Every scan covers</p>
           <p className="prose-serif mt-2 text-[14px] text-ink-soft">
-            All four checks run on every pass — nothing to configure.
+            All five checks run on every pass — nothing to configure.
           </p>
           <ul className="mt-4 space-y-3.5">
             {COVERAGE.map((check) => (
