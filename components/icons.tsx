@@ -69,7 +69,7 @@ export function Logo({ className }: { className?: string }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  The four checks                                                    */
+/*  The five checks                                                    */
 /* ------------------------------------------------------------------ */
 
 export function IconKey(props: IconProps) {
@@ -105,6 +105,15 @@ export function IconBraces(props: IconProps) {
     <Base {...props}>
       <path d="M8.5 3.75c-2 0-2.75 1-2.75 2.5v2.5c0 1.5-.75 2.5-2.25 2.5v1.5c1.5 0 2.25 1 2.25 2.5v2.5c0 1.5.75 2.5 2.75 2.5" />
       <path d="M15.5 3.75c2 0 2.75 1 2.75 2.5v2.5c0 1.5.75 2.5 2.25 2.5v1.5c-1.5 0-2.25 1-2.25 2.5v2.5c0 1.5-.75 2.5-2.75 2.5" />
+    </Base>
+  );
+}
+
+export function IconLayout(props: IconProps) {
+  return (
+    <Base {...props}>
+      <rect x="3.75" y="3.75" width="16.5" height="16.5" rx="2" />
+      <path d="M3.75 9h16.5M9 9v11.25" />
     </Base>
   );
 }

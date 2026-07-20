@@ -20,6 +20,15 @@ interface Teaser {
   tally: Record<string, number>;
   unlocked: { id: string; title: string; severity: string }[];
   locked: { severity: string }[];
+  stats?: {
+    report?: {
+      grade: string;
+      score: number;
+      securityScore: number;
+      designScore: number;
+      vibeScore: number;
+    };
+  };
 }
 
 type Phase = 'idle' | 'running' | 'done' | 'failed';
@@ -29,10 +38,11 @@ type Phase = 'idle' | 'running' | 'done' | 'failed';
 const STAGES: [number, string][] = [
   [0, 'Acquiring source (isolated workspace)'],
   [6, 'Secrets sweep'],
-  [16, 'Platform config audit'],
-  [26, 'Dependency registry check'],
-  [40, 'Insecure pattern analysis'],
-  [52, 'Writing report · purging source'],
+  [14, 'Platform config audit'],
+  [24, 'Dependency registry check'],
+  [36, 'Insecure pattern analysis'],
+  [46, 'Design audit · vibe check'],
+  [56, 'Grading · writing report · purging source'],
 ];
 
 export function ScanConsole() {
@@ -254,9 +264,27 @@ export function ScanConsole() {
               </button>
             </div>
 
+            {teaser.stats?.report && (
+              <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-ultra-deep px-4 py-3">
+                <span className="flex items-baseline gap-2.5">
+                  <span className="display text-4xl leading-none text-bone">
+                    {teaser.stats.report.grade}
+                  </span>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-bone/60">
+                    Repo grade
+                  </span>
+                </span>
+                <span className="font-mono text-[11px] tabular-nums text-bone/80">
+                  Security {teaser.stats.report.securityScore} · Design{' '}
+                  {teaser.stats.report.designScore} · Vibe meter {teaser.stats.report.vibeScore}
+                  /100
+                </span>
+              </div>
+            )}
+
             {clean ? (
               <p className="mt-5 flex items-center gap-2.5 text-sm text-bone">
-                <IconSparkle className="h-4 w-4 text-safe" /> No issues found by our four
+                <IconSparkle className="h-4 w-4 text-safe" /> No issues found by our five
                 checks — a good sign, not a guarantee.
               </p>
             ) : (

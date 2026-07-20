@@ -1,12 +1,17 @@
-// The scan report page: an inspection report. Findings grouped by
-// severity and filed as numbered items, with the "source destroyed"
-// stamp — the product's trust moment — right in the letterhead.
+// The scan report page: an inspection report. The letterhead carries the
+// "source destroyed" stamp (the product's trust moment), the report card
+// carries the grade, and the findings browser turns the list into a
+// severity-tabbed triage queue.
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { Alert, Card, SeverityBadge } from '@/components/ui';
+import type { ReportCard } from '@/lib/scanner/types';
+import { Alert, Card } from '@/components/ui';
 import { AutoRefresh } from '@/components/auto-refresh';
+import { toFindingView } from '@/components/findings';
+import { FindingsBrowser } from '@/components/findings-browser';
+import { ReportCardPlate } from '@/components/report-card';
 import { StampIn } from '@/components/fx';
 import {
   IconArchive,
@@ -18,20 +23,13 @@ import {
 
 export const metadata = { title: 'Scan report' };
 
-const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
-
-const SEVERITY_INTROS: Record<(typeof SEVERITIES)[number], string> = {
-  critical: 'Fix these before you launch — they are directly exploitable.',
-  high: 'Serious risks. Fix these as soon as you can.',
-  medium: 'Weaknesses worth fixing — they make real attacks easier.',
-  low: 'Worth reviewing when you get a moment.',
-};
-
-const SEVERITY_COLOR: Record<string, string> = {
-  critical: 'var(--color-critical)',
-  high: 'var(--color-high)',
-  medium: 'var(--color-medium)',
-  low: 'var(--color-low)',
+/** Row origin tags — which of the five checks filed the finding. */
+const CHECK_LABELS: Record<string, string> = {
+  secret: 'Secrets',
+  platform_config: 'Config',
+  dependency: 'Deps',
+  insecure_pattern: 'Code',
+  design: 'Design',
 };
 
 interface Finding {
@@ -62,23 +60,29 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
     .select('id, check_type, severity, title, explanation, file_path, line_start, evidence_masked, recommendation')
     .eq('scan_id', id);
 
-  const grouped = new Map<string, Finding[]>();
-  for (const f of (findings ?? []) as Finding[]) {
-    grouped.set(f.severity, [...(grouped.get(f.severity) ?? []), f]);
-  }
+  // One list, worst first; security findings ahead of design within a
+  // severity. The browser tabs and numbers everything from this order.
+  const all = (findings ?? []) as Finding[];
+  const browserFindings = all
+    .sort((a, b) => {
+      const aDesign = a.check_type === 'design' ? 1 : 0;
+      const bDesign = b.check_type === 'design' ? 1 : 0;
+      if (aDesign !== bDesign) return aDesign - bDesign;
+      return (a.file_path ?? '').localeCompare(b.file_path ?? '');
+    })
+    .map((f) => ({
+      ...toFindingView(f),
+      typeLabel: CHECK_LABELS[f.check_type] ?? f.check_type,
+    }));
 
   const stats = (scan.stats ?? {}) as {
     filesScanned?: number;
     durationMs?: number;
     packagesChecked?: number;
     notes?: string[];
+    report?: ReportCard;
   };
   const inFlight = scan.status === 'queued' || scan.status === 'running';
-
-  // Finding numbers run sequentially through the whole report, worst first.
-  const findingNumbers = new Map(
-    SEVERITIES.flatMap((sev) => grouped.get(sev) ?? []).map((f, i) => [f.id, i + 1]),
-  );
 
   return (
     <div>
@@ -170,108 +174,33 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </Alert>
         )}
 
-        {scan.status === 'completed' && (findings ?? []).length === 0 && (
+        {scan.status === 'completed' && stats.report && (
+          <ReportCardPlate report={stats.report} />
+        )}
+
+        {scan.status === 'completed' && all.length === 0 && (
           <Card className="py-14 text-center">
             <StampIn>
               <span className="tag tag--safe text-base">Clear · no findings</span>
             </StampIn>
             <p className="prose-serif mx-auto mt-6 max-w-lg text-[15px] text-ink-soft">
-              None of our four checks (secrets, platform configuration, dependencies, insecure
-              patterns) flagged anything. Remember: automated checks can&apos;t prove an app is
-              secure — this is a good sign, not a guarantee.
+              None of our five checks (secrets, platform configuration, dependencies, insecure
+              patterns, design tells) flagged anything. Remember: automated checks can&apos;t
+              prove an app is secure — this is a good sign, not a guarantee.
             </p>
           </Card>
         )}
 
-        {scan.status === 'completed' && (findings ?? []).length > 0 && (
+        {scan.status === 'completed' && all.length > 0 && (
           <>
-            {/* The tally — counts per severity, ruled like an instrument row */}
-            <div className="plate flex flex-wrap divide-x divide-[var(--line)] px-2 py-4">
-              {SEVERITIES.map((sev) => {
-                const count = grouped.get(sev)?.length ?? 0;
-                if (count === 0) return null;
-                return (
-                  <span key={sev} className="flex items-center gap-3 px-5 py-1">
-                    <span
-                      className="display text-3xl tabular-nums"
-                      style={{ color: SEVERITY_COLOR[sev] }}
-                    >
-                      {count}
-                    </span>
-                    <SeverityBadge severity={sev} />
-                  </span>
-                );
-              })}
-            </div>
-
             {(stats.notes ?? []).map((note) => (
               <Alert key={note} tone="info">
                 {note}
               </Alert>
             ))}
 
-            {SEVERITIES.map((sev) => {
-              const items = grouped.get(sev);
-              if (!items || items.length === 0) return null;
-              return (
-                <section key={sev}>
-                  <div className="rule-index pt-4">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <h2 className="text-lg font-semibold capitalize tracking-tight">
-                        {sev} — {items.length}
-                      </h2>
-                      <p className="text-sm text-ink-soft">{SEVERITY_INTROS[sev]}</p>
-                    </div>
-                  </div>
-                  <div className="mt-5 space-y-4">
-                    {items.map((f) => {
-                      const findingNo = findingNumbers.get(f.id) ?? 0;
-                      return (
-                        <div
-                          key={f.id}
-                          className="plate plate--plain p-6"
-                          style={{
-                            borderLeft: `3px solid ${SEVERITY_COLOR[sev]}`,
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <h3 className="font-semibold tracking-tight text-ink">{f.title}</h3>
-                            <span className="mono-tight shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute">
-                              Finding {String(findingNo).padStart(2, '0')}
-                            </span>
-                          </div>
-                          {f.file_path && (
-                            <p className="mono-tight mt-1.5 font-mono text-xs text-ink-mute">
-                              {f.file_path}
-                              {f.line_start ? `:${f.line_start}` : ''}
-                            </p>
-                          )}
-                          {f.evidence_masked && (
-                            <pre className="readout mt-4 overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-ink-soft">
-                              {f.evidence_masked}
-                            </pre>
-                          )}
-                          <div className="mt-5 space-y-4 text-sm leading-relaxed">
-                            <div className="border-l-2 border-[var(--line-strong)] pl-4">
-                              <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-mute">
-                                Why this matters
-                              </p>
-                              <p className="prose-serif text-[15px] text-ink-soft">{f.explanation}</p>
-                            </div>
-                            <div className="border-l-2 border-safe/70 pl-4">
-                              <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-safe">
-                                How to fix it
-                              </p>
-                              <p className="prose-serif text-[15px] text-ink-soft">{f.recommendation}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
+            {/* Severity tabs + accordion list — the whole report, one queue */}
+            <FindingsBrowser findings={browserFindings} />
 
             <p className="rule-hair pt-5 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-ink-mute">
               End of report ∎

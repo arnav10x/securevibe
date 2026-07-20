@@ -39,11 +39,12 @@
   --color-signal:     #b3261e;
   --color-signal-ink: #a02019;
 
-  /* Severity ladder — data colors, tuned for the light page */
-  --color-critical: #b3261e;
-  --color-high:     #8f5606;
-  --color-medium:   #6e6403;
-  --color-low:      #47608f;
+  /* Severity ladder — vivid enough to read at a glance on paper white,
+     dark enough to hold contrast as badge text. */
+  --color-critical: #d1180b;
+  --color-high:     #c25e04;
+  --color-medium:   #a17c00;
+  --color-low:      #3567c9;
 
   /* Type — one grotesk, one mono */
   --font-display: var(--font-inter), -apple-system, "SF Pro Display", ui-sans-serif, sans-serif;

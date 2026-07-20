@@ -10,7 +10,8 @@ export type CheckType =
   | 'secret'
   | 'platform_config'
   | 'dependency'
-  | 'insecure_pattern';
+  | 'insecure_pattern'
+  | 'design';
 
 export interface Finding {
   checkType: CheckType;
@@ -41,6 +42,40 @@ export interface ScanStats {
   packageLookupFailures: number;
   /** Human-readable notes, e.g. "scan stopped early: file limit reached" */
   notes: string[];
+  /** The graded report card (security + design), when the scan produced one. */
+  report?: ReportCard;
+}
+
+/** One graded area of the design audit, e.g. "Typography" or "Originality". */
+export interface DesignCategoryScore {
+  id: string;
+  /** Display name, e.g. "Typography & hierarchy" */
+  label: string;
+  /** 0–100, higher is better */
+  score: number;
+  findingCount: number;
+}
+
+/**
+ * The report card stored in scans.stats. Everything here is derived from
+ * findings — deleting a finding and re-deriving would give the same card.
+ */
+export interface ReportCard {
+  /** Overall letter, e.g. "B-" — the headline number of the report. */
+  grade: string;
+  /** Overall 0–100 (blend of security and design). */
+  score: number;
+  /** 0–100 from the security findings alone. */
+  securityScore: number;
+  /** 0–100 from the design findings alone. */
+  designScore: number;
+  /**
+   * 0–100: how strongly the project pattern-matches unedited AI-generated
+   * output. 0 reads human-crafted; 100 is a wall of template tells.
+   */
+  vibeScore: number;
+  /** Design areas with individual scores, worst first. */
+  categories: DesignCategoryScore[];
 }
 
 export interface ScanResult {

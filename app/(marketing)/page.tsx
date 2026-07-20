@@ -20,11 +20,12 @@ import {
   IconClock,
   IconDatabase,
   IconKey,
+  IconLayout,
   IconLock,
   IconScan,
 } from '@/components/icons';
 
-// The four checks as ledger entries, not marketing cards.
+// The five checks as ledger entries, not marketing cards.
 const CHECKS = [
   {
     icon: IconKey,
@@ -62,6 +63,15 @@ const CHECKS = [
     detects: ['Hallucinated packages', 'Brand-new packages', 'npm + PyPI verified'],
     severity: 'Medium – Critical',
   },
+  {
+    icon: IconLayout,
+    fig: '05',
+    name: 'Design audit',
+    title: 'The vibe-coded look, graded',
+    body: 'The tells that mark a site as AI-generated the moment it loads: purple-gradient template heroes, emoji icons, "Trusted by 10,000+" claims with no users, placeholder legal pages, buttons that go nowhere. Judged against the standards real design teams use — WCAG, Apple HIG, Nielsen heuristics — and graded A+ to F.',
+    detects: ['Template landing pages', 'Fake social proof', 'Dead links & stub features', 'Accessibility failures'],
+    severity: 'Graded A+ – F',
+  },
 ];
 
 // The detection registry, excerpted. Dense on purpose.
@@ -78,10 +88,14 @@ const REGISTRY: { sev: 'critical' | 'high' | 'medium'; name: string }[] = [
   { sev: 'high', name: 'SQL built by string concat' },
   { sev: 'high', name: 'Shell exec with user input' },
   { sev: 'high', name: 'Package names that don\'t exist' },
+  { sev: 'high', name: 'Login forms that don\'t authenticate' },
+  { sev: 'high', name: '"Trusted by 10,000+" invented claims' },
   { sev: 'medium', name: 'TLS certificate checks disabled' },
   { sev: 'medium', name: 'CORS set to *' },
   { sev: 'medium', name: '"admin" flags in localStorage' },
   { sev: 'medium', name: 'Packages younger than 30 days' },
+  { sev: 'medium', name: 'Purple-gradient template heroes' },
+  { sev: 'medium', name: 'Emoji standing in for icons' },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -97,7 +111,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What does the instant scan show without an account?',
-    a: 'The full tally, plus every medium and low-severity finding with its fix. Critical and high-severity findings come back sealed — you can see how many exist and which check found them, but their contents open only with a free account. The scan you ran attaches to your new account automatically.',
+    a: 'Your repo\'s letter grade, the vibe meter, the full tally, plus every medium and low-severity finding with its fix. Critical and high-severity findings come back sealed — you can see how many exist and which check found them, but their contents open only with a free account. The scan you ran attaches to your new account automatically.',
   },
   {
     q: 'Is my code used to train AI models?',
@@ -181,7 +195,7 @@ export default function LandingPage() {
             <Reveal delay={180}>
               <p className="prose-serif mt-6 max-w-xl text-lg text-ink-soft">
                 Paste a repo below and find out in about a minute — no signup, nothing
-                installed. Four checks, a plain-English verdict, and your source destroyed{' '}
+                installed. Five checks, a letter grade, and your source destroyed{' '}
                 <strong className="font-semibold text-ink">the moment the report exists.</strong>
               </p>
             </Reveal>
@@ -200,7 +214,7 @@ export default function LandingPage() {
             </Reveal>
             <Reveal delay={340}>
               <p className="mono-tight mt-8 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-mute">
-                4 checks · ≈60s to a verdict · 0 bytes of code retained
+                5 checks · a letter grade · 0 bytes of code retained
               </p>
             </Reveal>
           </div>
@@ -257,7 +271,7 @@ export default function LandingPage() {
                     </li>
                     <li>
                       <span className="mono-tight mr-2 font-mono text-[10px] text-verdant-ink">02</span>
-                      Four checks run in an isolated workspace; nothing executes
+                      Five checks run in an isolated workspace; nothing executes
                     </li>
                     <li>
                       <span className="mono-tight mr-2 font-mono text-[10px] text-verdant-ink">03</span>
@@ -299,7 +313,7 @@ export default function LandingPage() {
           <SectionHead n="01" title="What the scanner checks" />
           <Reveal delay={80}>
             <h2 className="display mt-6 max-w-3xl text-[clamp(1.9rem,3.8vw,2.9rem)]">
-              The four ways AI-built apps <em>get breached.</em>
+              How AI-built apps get breached — <em>and how they get spotted.</em>
             </h2>
           </Reveal>
 
@@ -527,7 +541,7 @@ export default function LandingPage() {
                     {[
                       '3 scans per month + zip uploads',
                       'Full reports — nothing sealed',
-                      'All four security checks',
+                      'All five checks — security + design grade',
                       'Same code-deletion guarantee',
                     ].map((feat) => (
                       <li key={feat} className="flex items-start gap-2.5">

@@ -151,8 +151,8 @@ export function SeverityBadge({ severity }: { severity: string }) {
       className="inline-flex items-center gap-1.5 rounded-full border px-2 py-px font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
       style={{
         color,
-        borderColor: `color-mix(in srgb, ${color} 55%, transparent)`,
-        background: `color-mix(in srgb, ${color} 7%, transparent)`,
+        borderColor: `color-mix(in srgb, ${color} 60%, transparent)`,
+        background: `color-mix(in srgb, ${color} 12%, transparent)`,
       }}
     >
       <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
