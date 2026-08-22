@@ -19,6 +19,9 @@ beforeAll(async () => {
   result = await scanDirectory(FIXTURE, {
     fetchImpl: fakeRegistryFetch,
     now: FIXED_NOW,
+    // This fixture stands in for a scanned repo, so a committed .env is a
+    // provable leak (github tarball == tracked files).
+    sourceType: 'github',
   });
 });
 

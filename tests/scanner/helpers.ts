@@ -17,9 +17,17 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** Mimics registry.npmjs.org, api.npmjs.org, pypi.org and pypistats.org. */
+/** Mimics registry.npmjs.org, api.npmjs.org, pypi.org, pypistats.org, osv.dev. */
 export const fakeRegistryFetch: typeof fetch = async (input) => {
   const url = String(input);
+
+  // OSV.dev — by default report no known vulnerabilities for anything.
+  if (url === 'https://api.osv.dev/v1/querybatch') {
+    return json({ results: [] });
+  }
+  if (url.startsWith('https://api.osv.dev/v1/vulns/')) {
+    return json({ message: 'Not found' }, 404);
+  }
 
   let match = /^https:\/\/registry\.npmjs\.org\/(.+)$/.exec(url);
   if (match) {

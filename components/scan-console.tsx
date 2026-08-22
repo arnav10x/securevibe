@@ -22,10 +22,11 @@ interface Teaser {
   locked: { severity: string }[];
   stats?: {
     report?: {
-      grade: string;
-      score: number;
+      securityGrade: string;
       securityScore: number;
-      designScore: number;
+      securityCapReason: string | null;
+      insufficientSignal: boolean;
+      craftScore: number;
       vibeScore: number;
     };
   };
@@ -265,20 +266,27 @@ export function ScanConsole() {
             </div>
 
             {teaser.stats?.report && (
-              <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-ultra-deep px-4 py-3">
-                <span className="flex items-baseline gap-2.5">
-                  <span className="display text-4xl leading-none text-bone">
-                    {teaser.stats.report.grade}
+              <div className="mt-5 rounded-xl bg-ultra-deep px-4 py-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <span className="flex items-baseline gap-2.5">
+                    <span className="display text-4xl leading-none text-bone">
+                      {teaser.stats.report.securityGrade}
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-bone/60">
+                      Security grade
+                    </span>
                   </span>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-bone/60">
-                    Repo grade
+                  <span className="font-mono text-[11px] tabular-nums text-bone/80">
+                    {teaser.stats.report.insufficientSignal
+                      ? 'not enough code to grade'
+                      : `Security ${teaser.stats.report.securityScore} · Craft ${teaser.stats.report.craftScore} · Vibe ${teaser.stats.report.vibeScore}/100`}
                   </span>
-                </span>
-                <span className="font-mono text-[11px] tabular-nums text-bone/80">
-                  Security {teaser.stats.report.securityScore} · Design{' '}
-                  {teaser.stats.report.designScore} · Vibe meter {teaser.stats.report.vibeScore}
-                  /100
-                </span>
+                </div>
+                {teaser.stats.report.securityCapReason && (
+                  <p className="mt-2 font-mono text-[10.5px] leading-snug text-signal">
+                    {teaser.stats.report.securityCapReason}
+                  </p>
+                )}
               </div>
             )}
 

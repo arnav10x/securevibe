@@ -1,7 +1,7 @@
 // Rules for Check 4: common insecure code patterns.
 // Line-based regex heuristics, scoped by file extension to limit noise.
 
-import type { Severity } from '../types';
+import type { Confidence, Severity } from '../types';
 
 export interface PatternRule {
   id: string;
@@ -12,6 +12,16 @@ export interface PatternRule {
   extensions: Set<string>;
   explanation: string;
   recommendation: string;
+  /** How sure a plain match is. Defaults to 'heuristic'. */
+  confidence?: Confidence;
+  /**
+   * For injection rules: if the matched line ALSO contains a known dangerous
+   * sink (a real db.query/exec call), the match is upgraded from a guess to
+   * 'likely'. This is the cheap stand-in for AST taint tracking, and it stops
+   * a stray "SELECT ..." + string in a comment or SQL-builder from counting
+   * as a real vulnerability.
+   */
+  sinkPattern?: RegExp;
 }
 
 const JS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.vue', '.svelte']);
@@ -23,6 +33,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'eval-dynamic',
     title: 'eval() called on a dynamic value',
     severity: 'high',
+    confidence: 'likely',
     // eval( followed by something that is NOT a string literal
     regex: /\beval\s*\(\s*(?!["'`)])/,
     extensions: JS_AND_PY,
@@ -39,6 +50,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'new-function',
     title: 'new Function() used to build code from strings',
     severity: 'high',
+    confidence: 'likely',
     regex: /\bnew\s+Function\s*\(/,
     extensions: JS,
     explanation:
@@ -52,6 +64,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'python-exec-dynamic',
     title: 'exec() called on a dynamic value',
     severity: 'high',
+    confidence: 'likely',
     regex: /\bexec\s*\(\s*(?!["'])/,
     extensions: PY,
     explanation:
@@ -119,6 +132,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'tls-reject-unauthorized',
     title: 'TLS certificate verification is disabled',
     severity: 'medium',
+    confidence: 'likely',
     regex: /rejectUnauthorized\s*:\s*false/,
     extensions: JS,
     explanation:
@@ -135,6 +149,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'node-tls-env',
     title: 'TLS verification disabled via NODE_TLS_REJECT_UNAUTHORIZED',
     severity: 'medium',
+    confidence: 'likely',
     regex: /NODE_TLS_REJECT_UNAUTHORIZED[^\n]*=\s*["']?0/,
     extensions: new Set([...JS, '.sh', '.yml', '.yaml', '.dockerfile', '']),
     explanation:
@@ -148,6 +163,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'python-verify-false',
     title: 'TLS certificate verification disabled (verify=False)',
     severity: 'medium',
+    confidence: 'likely',
     regex: /\bverify\s*=\s*False\b/,
     extensions: PY,
     explanation:
@@ -176,6 +192,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'hardcoded-password-compare',
     title: 'Password compared against a hardcoded value',
     severity: 'high',
+    confidence: 'likely',
     regex: /\b(?:password|passwd|pwd)\s*===?\s*["'][^"']{4,}["']/i,
     extensions: JS_AND_PY,
     explanation:
@@ -186,5 +203,90 @@ export const PATTERN_RULES: PatternRule[] = [
       'Use a real authentication system (e.g. your platform\'s auth provider) ' +
       'or store salted password hashes (bcrypt/argon2) — never the password ' +
       'itself, and never in code.',
+  },
+
+  // ─────────────── the classic vibe-coder leak: secrets in the browser ───────────────
+  {
+    id: 'public-env-secret',
+    title: 'A secret is exposed to the browser via a public env var',
+    severity: 'high',
+    confidence: 'likely',
+    // A build-time-public prefix (NEXT_PUBLIC_, VITE_, REACT_APP_, EXPO_PUBLIC_,
+    // PUBLIC_) on a variable whose name says "secret". Anything with these
+    // prefixes is inlined into the JavaScript shipped to every visitor. The
+    // trailing [A-Z0-9_]* lets the match run to the true end of the name so
+    // "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY" is caught, not just the prefix.
+    regex:
+      /\b(?:NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|PUBLIC_|GATSBY_|VUE_APP_)[A-Z0-9_]*(?:SERVICE_ROLE|SECRET|PRIVATE|PASSWORD|API_?KEY|APIKEY|ACCESS_?KEY|TOKEN)[A-Z0-9_]*\b/,
+    extensions: new Set([...JS, '.json', '.env', '']),
+    explanation:
+      'Environment variables with a public prefix (NEXT_PUBLIC_, VITE_, ' +
+      'REACT_APP_ …) are baked into the JavaScript bundle your app sends to ' +
+      'every visitor — they are NOT secret. This one is named like a real ' +
+      'secret (service role, API key, password). If it holds a real ' +
+      'credential, anyone can open DevTools and read it. This exact mistake ' +
+      '(a service_role key shipped as NEXT_PUBLIC_) is how several vibe-coded ' +
+      'apps leaked their entire database.',
+    recommendation:
+      'Move this to a server-only variable WITHOUT the public prefix (e.g. ' +
+      'SUPABASE_SERVICE_ROLE_KEY, read only in server code / route handlers), ' +
+      'rotate the credential, and make sure the browser never receives it. ' +
+      'Only truly-public values (like a Supabase anon key) belong behind a ' +
+      'public prefix.',
+  },
+  {
+    id: 'react-dangerous-html',
+    title: 'Untrusted HTML injected with dangerouslySetInnerHTML',
+    severity: 'high',
+    confidence: 'likely',
+    // Flags dangerouslySetInnerHTML fed a variable/expression, not a constant.
+    regex: /dangerouslySetInnerHTML\s*=\s*\{\{\s*__html:\s*(?!["'`])/,
+    extensions: JS,
+    explanation:
+      'dangerouslySetInnerHTML renders raw HTML without React’s protection. ' +
+      'When the HTML comes from a variable — user input, an API response, ' +
+      'markdown — an attacker can slip in a <script> or an onerror handler ' +
+      'and run code in your users’ browsers (cross-site scripting), stealing ' +
+      'sessions and data.',
+    recommendation:
+      'Render text as text (just {value}) so React escapes it. If you must ' +
+      'render HTML, sanitize it first with a library like DOMPurify: ' +
+      'dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}.',
+  },
+  {
+    id: 'dom-innerhtml-assign',
+    title: 'HTML built and assigned to innerHTML',
+    severity: 'medium',
+    confidence: 'heuristic',
+    // .innerHTML = <not a plain string literal> — template/concat/variable.
+    regex: /\.innerHTML\s*=\s*(?!["'`]\s*[;<])/,
+    extensions: JS,
+    explanation:
+      'Assigning to .innerHTML with anything other than a fixed string can ' +
+      'introduce cross-site scripting: if any part of the value comes from a ' +
+      'user or an API, embedded markup runs as code in the browser.',
+    recommendation:
+      'Use textContent for text, or build elements with createElement. If you ' +
+      'genuinely need HTML, sanitize it (DOMPurify) before assigning.',
+  },
+  {
+    id: 'node-command-injection',
+    title: 'Shell command built from a variable (command injection risk)',
+    severity: 'high',
+    confidence: 'likely',
+    // child_process exec/execSync/spawn given a template literal or concat,
+    // i.e. not a single quoted string literal argument.
+    regex:
+      /\b(?:exec|execSync|spawn|spawnSync|execFile)\s*\(\s*(?:`[^`]*\$\{|["'][^"']*["']\s*\+|\w+\s*\+|`[^`]*`\s*\+)/,
+    extensions: JS,
+    explanation:
+      'A shell command is being assembled from a variable or template string ' +
+      'and handed to child_process. If any piece comes from user input, an ' +
+      'attacker can append their own command (e.g. "; rm -rf /") and run it ' +
+      'on your server — full command injection.',
+    recommendation:
+      'Never build shell strings from input. Use execFile/spawn with the ' +
+      'command and an ARRAY of arguments (execFile("git", ["clone", url])), ' +
+      'so arguments can never be reinterpreted as shell syntax.',
   },
 ];

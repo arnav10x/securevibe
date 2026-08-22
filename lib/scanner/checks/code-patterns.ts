@@ -28,9 +28,18 @@ export function checkCodePatternsInFile(relPath: string, content: string): Findi
       if (seen.has(key)) continue;
       seen.add(key);
 
+      // A guess becomes 'likely' when the same line also shows a real sink —
+      // the cheap stand-in for taint tracking (see PatternRule.sinkPattern).
+      let confidence = rule.confidence ?? 'heuristic';
+      if (rule.sinkPattern && rule.sinkPattern.test(line) && confidence === 'heuristic') {
+        confidence = 'likely';
+      }
+
       findings.push({
         checkType: 'insecure_pattern',
         severity: rule.severity,
+        confidence,
+        ruleId: rule.id,
         title: rule.title,
         explanation: rule.explanation,
         filePath: relPath,

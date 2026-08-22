@@ -2,7 +2,7 @@
 // Each rule is one kind of credential. Adding a new secret type = adding
 // one entry here; the engine in checks/secrets.ts does the rest.
 
-import type { Severity } from '../types';
+import type { Confidence, Severity } from '../types';
 
 export interface SecretRule {
   id: string;
@@ -14,6 +14,12 @@ export interface SecretRule {
   recommendation: string;
   /** If true, the captured value must also look random (high entropy). */
   requiresEntropy?: boolean;
+  /**
+   * How sure a match is. A provider-specific format (AKIA…, sk_live_…) is a
+   * fingerprint we can stand behind — 'verified' (the default). A
+   * credential-shaped assignment is a strong guess — 'likely'.
+   */
+  confidence?: Confidence;
 }
 
 const MOVE_TO_ENV =
@@ -175,6 +181,8 @@ export const SECRET_RULES: SecretRule[] = [
     regex:
       /(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|auth[_-]?token|access[_-]?key|client[_-]?secret)["']?\s*[:=]\s*["']([^"']{8,})["']/i,
     requiresEntropy: true,
+    // A credential-shaped assignment is a strong guess, not a fingerprint.
+    confidence: 'likely',
     explanation:
       'A variable with a credential-like name is assigned a random-looking ' +
       'value directly in the code. If this is a real secret, everyone with ' +

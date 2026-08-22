@@ -42,6 +42,7 @@ interface Finding {
   line_start: number | null;
   evidence_masked: string | null;
   recommendation: string;
+  confidence?: string;
 }
 
 export default async function ScanPage({ params }: { params: Promise<{ id: string }> }) {
@@ -57,7 +58,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
 
   const { data: findings } = await supabase
     .from('findings')
-    .select('id, check_type, severity, title, explanation, file_path, line_start, evidence_masked, recommendation')
+    .select('id, check_type, severity, confidence, title, explanation, file_path, line_start, evidence_masked, recommendation')
     .eq('scan_id', id);
 
   // One list, worst first; security findings ahead of design within a
@@ -178,13 +179,14 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           <ReportCardPlate report={stats.report} />
         )}
 
-        {scan.status === 'completed' && all.length === 0 && (
+        {/* Legacy scans with no report card still get an honest clean note. */}
+        {scan.status === 'completed' && !stats.report && all.length === 0 && (
           <Card className="py-14 text-center">
             <StampIn>
               <span className="tag tag--safe text-base">Clear · no findings</span>
             </StampIn>
             <p className="prose-serif mx-auto mt-6 max-w-lg text-[15px] text-ink-soft">
-              None of our five checks (secrets, platform configuration, dependencies, insecure
+              None of our checks (secrets, platform configuration, dependencies, insecure
               patterns, design tells) flagged anything. Remember: automated checks can&apos;t
               prove an app is secure — this is a good sign, not a guarantee.
             </p>

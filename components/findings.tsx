@@ -22,6 +22,31 @@ export interface FindingView {
   evidenceMasked: string | null;
   explanation: string;
   recommendation: string;
+  confidence?: string;
+}
+
+/** How sure we are, in words the reader can weigh. */
+const CONFIDENCE_LABEL: Record<string, { label: string; title: string }> = {
+  verified: { label: 'Verified', title: 'A fact we can stand behind (e.g. a known CVE or a decoded key).' },
+  likely: { label: 'Likely', title: 'A strong pattern reaching real danger, but not proven.' },
+  heuristic: { label: 'Heuristic', title: 'A pattern-match worth a look — treat as a hint, not a verdict.' },
+};
+
+/**
+ * A ready-to-paste prompt for the user's AI coding tool — the way a
+ * non-technical founder actually fixes things. Built purely from the finding.
+ */
+export function fixPrompt(f: FindingView): string {
+  const where = f.filePath ? `${f.filePath}${f.lineStart ? `:${f.lineStart}` : ''}` : 'my project';
+  return [
+    `Fix this security issue in ${where}.`,
+    ``,
+    `Problem: ${f.title}`,
+    `Why it matters: ${f.explanation}`,
+    `How to fix it: ${f.recommendation}`,
+    ``,
+    `Make the change, then explain in plain English what you changed and why.`,
+  ].join('\n');
 }
 
 export function FindingAccordion({
@@ -55,6 +80,18 @@ export function FindingAccordion({
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-ink">
           {f.title}
         </span>
+        {f.confidence && CONFIDENCE_LABEL[f.confidence] && (
+          <span
+            title={CONFIDENCE_LABEL[f.confidence].title}
+            className="mono-tight hidden shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] sm:block"
+            style={{
+              color: f.confidence === 'verified' ? 'var(--color-safe)' : 'var(--color-ink-mute)',
+              border: `1px solid ${f.confidence === 'verified' ? 'color-mix(in srgb, var(--color-safe) 45%, transparent)' : 'var(--line-strong)'}`,
+            }}
+          >
+            {CONFIDENCE_LABEL[f.confidence].label}
+          </span>
+        )}
         {typeLabel && (
           <span className="mono-tight hidden shrink-0 rounded border border-[var(--line-strong)] px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-ink-mute md:block">
             {typeLabel}
@@ -98,6 +135,16 @@ export function FindingAccordion({
             <p className="prose-serif text-[15px] text-ink-soft">{f.recommendation}</p>
           </div>
         </div>
+
+        {/* Ready-to-paste prompt for the user's AI coding tool */}
+        <details className="mt-4">
+          <summary className="mono-tight cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-mute hover:text-ink">
+            Fix prompt — paste into Cursor / Lovable / Claude
+          </summary>
+          <pre className="readout mt-2.5 overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-soft">
+            {fixPrompt(f)}
+          </pre>
+        </details>
       </div>
     </details>
   );
@@ -113,6 +160,7 @@ export function toFindingView(row: {
   file_path: string | null;
   line_start: number | null;
   evidence_masked: string | null;
+  confidence?: string;
 }): FindingView {
   return {
     id: row.id,
@@ -123,5 +171,6 @@ export function toFindingView(row: {
     evidenceMasked: row.evidence_masked,
     explanation: row.explanation,
     recommendation: row.recommendation,
+    confidence: row.confidence,
   };
 }

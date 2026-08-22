@@ -6,6 +6,19 @@
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
+/**
+ * How sure we are a finding is real. This is the difference between a fact
+ * and a guess, and it drives the grade: only `verified` findings can force a
+ * failing grade, so a noisy regex can never fail an app it can't prove is broken.
+ *
+ *  - verified   — a fact we can stand behind: a known CVE from a vuln database,
+ *                 a decoded service_role JWT, a key whose format is unmistakable,
+ *                 a package the registry says does not exist.
+ *  - likely     — a strong pattern reaching a real sink, but not proven.
+ *  - heuristic  — a regex guess. Worth showing, never worth failing you over.
+ */
+export type Confidence = 'verified' | 'likely' | 'heuristic';
+
 export type CheckType =
   | 'secret'
   | 'platform_config'
@@ -31,6 +44,10 @@ export interface Finding {
   evidenceMasked?: string;
   /** What the user should do about it, in plain English */
   recommendation: string;
+  /** How sure we are (drives the grade). Defaults to 'heuristic' if unset. */
+  confidence?: Confidence;
+  /** The rule that produced this, for suppression via .securevibe-ignore. */
+  ruleId?: string;
 }
 
 export interface ScanStats {
@@ -59,22 +76,50 @@ export interface DesignCategoryScore {
 /**
  * The report card stored in scans.stats. Everything here is derived from
  * findings — deleting a finding and re-deriving would give the same card.
+ *
+ * Security and Craft are two INDEPENDENT grades. We never blend them: a
+ * security tool must not hide a leaked key behind good typography, and it
+ * must not punish a secure app for looking template-y. The Security grade is
+ * the headline; Craft is secondary.
  */
 export interface ReportCard {
-  /** Overall letter, e.g. "B-" — the headline number of the report. */
-  grade: string;
-  /** Overall 0–100 (blend of security and design). */
-  score: number;
-  /** 0–100 from the security findings alone. */
+  // ── Security (the headline) ─────────────────────────────────────────
+  /** Security letter grade, e.g. "F". "—" when there was too little to grade. */
+  securityGrade: string;
+  /** 0–100 security score behind the grade. */
   securityScore: number;
-  /** 0–100 from the design findings alone. */
-  designScore: number;
+  /**
+   * When the grade is held down by a proven serious finding, this says why —
+   * e.g. "Capped at F: a live secret is committed." null when nothing caps it.
+   * Modeled on SSL Labs, where one fatal finding sets the ceiling regardless
+   * of how clean everything else is.
+   */
+  securityCapReason: string | null;
+  /** Count of security findings by severity, for the at-a-glance strip. */
+  tally: Record<Severity, number>;
+  /** True when code was scanned and zero security findings were filed. */
+  clean: boolean;
+  /**
+   * True when there was almost no code to look at (empty repo, docs-only).
+   * A scan with nothing to find is not an A+ — it is "we couldn't tell".
+   */
+  insufficientSignal: boolean;
+  /** Honest, plain-English list of what a source scan cannot see. */
+  limitations: string[];
+
+  // ── Craft (secondary — how finished/original the build looks) ────────
+  /** Craft letter grade (design polish + originality). */
+  craftGrade: string;
+  /** 0–100 craft score. */
+  craftScore: number;
   /**
    * 0–100: how strongly the project pattern-matches unedited AI-generated
    * output. 0 reads human-crafted; 100 is a wall of template tells.
    */
   vibeScore: number;
-  /** Design areas with individual scores, worst first. */
+  /** Plain-words reading of the vibe meter, e.g. "A few template tells". */
+  vibeVerdict: string;
+  /** Craft areas with individual scores, worst first. */
   categories: DesignCategoryScore[];
 }
 
@@ -110,4 +155,16 @@ export interface ScannerOptions {
   now?: () => Date;
   /** Abort the file-scanning loop after this many ms (partial results). */
   timeBudgetMs?: number;
+  /**
+   * Where the source came from, so we can tell a COMMITTED secret from one
+   * that merely sits in an uploaded folder:
+   *  - 'github' — the files are a repo tarball, i.e. exactly what git tracks,
+   *    so an .env present here really is committed (a verified critical).
+   *  - 'zip'    — an arbitrary uploaded folder; we cannot prove what git
+   *    tracks, so we fall back to the .gitignore and speak carefully.
+   * Defaults to 'zip' (the cautious assumption).
+   */
+  sourceType?: 'github' | 'zip';
+  /** Turn off the network CVE lookup (OSV) — used by offline tests. */
+  skipVulnerabilityLookup?: boolean;
 }

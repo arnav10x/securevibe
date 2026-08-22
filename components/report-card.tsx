@@ -1,29 +1,31 @@
-// The report card: the letter grade, the two scores behind it, the vibe
-// meter, and the per-category rundown. Pure render — everything shown is
-// derived server-side by the scanner and stored in scans.stats.report.
+// The report card. Two INDEPENDENT grades: Security is the headline (a
+// security tool must not hide a leaked key behind good typography), Craft is
+// secondary. When a proven serious finding holds the grade down, we say so —
+// SSL-Labs style — because "capped at F because a live key is committed" is
+// more useful and more shareable than "you lost 37 points". A scan with
+// nothing to look at reads "not enough to grade", never a free A+.
 //
-// Shared by the full report (/scans/[id]) and the public preview (/r/[id]):
-// the grade itself is always free to see; the findings behind it follow
-// each page's own gating.
+// Pure render — everything shown is derived server-side by the scanner and
+// stored in scans.stats.report.
 
-import type { ReportCard } from '@/lib/scanner/types';
-
-/** How loudly the repo reads as unedited AI output, in plain words. */
-function vibeVerdict(score: number): string {
-  if (score >= 80) return 'Unmistakably vibe coded';
-  if (score >= 50) return 'Clearly template-flavored';
-  if (score >= 20) return 'A few template tells';
-  return 'Reads hand-built';
-}
+import type { ReportCard, Severity } from '@/lib/scanner/types';
 
 /** Color only ever means something functional: cleared, or hazard. */
-function gradeColor(score: number): string {
-  if (score >= 90) return 'var(--color-safe)';
-  if (score < 63) return 'var(--color-signal)';
+function gradeColor(grade: string): string {
+  if (grade === '—') return 'var(--color-ink-mute)';
+  if (/^A/.test(grade) || grade === 'B+') return 'var(--color-safe)';
+  if (grade.startsWith('F') || grade.startsWith('D')) return 'var(--color-signal)';
   return 'var(--color-ink)';
 }
 
-function ScoreCell({ label, value }: { label: string; value: number }) {
+const SEVERITY_COLOR: Record<Severity, string> = {
+  critical: 'var(--color-critical)',
+  high: 'var(--color-high)',
+  medium: 'var(--color-medium)',
+  low: 'var(--color-low)',
+};
+
+function ScoreCell({ label, value, suffix = '/100' }: { label: string; value: number | string; suffix?: string }) {
   return (
     <div className="px-5 py-1">
       <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
@@ -31,36 +33,67 @@ function ScoreCell({ label, value }: { label: string; value: number }) {
       </p>
       <p className="mt-1 flex items-baseline gap-1">
         <span className="display text-3xl tabular-nums text-ink">{value}</span>
-        <span className="font-mono text-[10px] text-ink-mute">/100</span>
+        <span className="font-mono text-[10px] text-ink-mute">{suffix}</span>
       </p>
     </div>
   );
 }
 
 export function ReportCardPlate({ report }: { report: ReportCard }) {
+  const severities: Severity[] = ['critical', 'high', 'medium', 'low'];
+  const hasFindings = severities.some((s) => report.tally[s] > 0);
+
   return (
     <div className="plate overflow-hidden">
       <div className="flex flex-wrap items-stretch">
-        {/* The grade itself — the headline of the whole report */}
+        {/* The Security grade — the headline of the whole report */}
         <div className="flex items-center gap-5 border-r border-[var(--line)] px-6 py-5 sm:px-8">
           <span
             className="display text-7xl leading-none tracking-tight"
-            style={{ color: gradeColor(report.score) }}
+            style={{ color: gradeColor(report.securityGrade) }}
           >
-            {report.grade}
+            {report.securityGrade}
           </span>
           <div>
-            <p className="label">Repo grade</p>
+            <p className="label">Security grade</p>
             <p className="mono-tight mt-1.5 font-mono text-[11px] tabular-nums text-ink-soft">
-              {report.score}/100 overall
+              {report.insufficientSignal ? 'not enough to grade' : `${report.securityScore}/100`}
             </p>
           </div>
         </div>
 
         <div className="flex flex-1 flex-wrap items-center divide-x divide-[var(--line)] py-4">
-          <ScoreCell label="Security" value={report.securityScore} />
-          <ScoreCell label="Design craft" value={report.designScore} />
-          <div className="min-w-44 flex-1 px-5 py-1">
+          {/* At-a-glance severity tally */}
+          <div className="px-5 py-1">
+            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
+              Findings
+            </p>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {hasFindings ? (
+                severities
+                  .filter((s) => report.tally[s] > 0)
+                  .map((s) => (
+                    <span key={s} className="flex items-baseline gap-1">
+                      <span
+                        className="display text-xl tabular-nums"
+                        style={{ color: SEVERITY_COLOR[s] }}
+                      >
+                        {report.tally[s]}
+                      </span>
+                      <span className="font-mono text-[10px] uppercase tracking-wide text-ink-mute">
+                        {s}
+                      </span>
+                    </span>
+                  ))
+              ) : (
+                <span className="text-[13px] text-ink-soft">
+                  {report.insufficientSignal ? '—' : 'none'}
+                </span>
+              )}
+            </div>
+          </div>
+          <ScoreCell label="Craft" value={report.insufficientSignal && !hasFindings ? '—' : report.craftScore} />
+          <div className="min-w-40 flex-1 px-5 py-1">
             <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
               Vibe meter
             </p>
@@ -70,14 +103,45 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
                 style={{ width: `${Math.max(report.vibeScore, 2)}%` }}
               />
             </div>
-            <p className="mt-1.5 text-[12px] leading-snug text-ink-soft">
-              {vibeVerdict(report.vibeScore)}
-            </p>
+            <p className="mt-1.5 text-[12px] leading-snug text-ink-soft">{report.vibeVerdict}</p>
           </div>
         </div>
       </div>
 
-      {/* The rundown — every design area, worst first */}
+      {/* Why the grade is capped — the single most useful line when it applies */}
+      {report.securityCapReason && (
+        <div className="rule-hair px-6 py-3 sm:px-8">
+          <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
+            <span
+              className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
+              style={{ background: 'var(--color-signal)' }}
+            >
+              Capped
+            </span>
+            <span>{report.securityCapReason}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Insufficient-signal / clean honesty banner */}
+      {(report.insufficientSignal || report.clean) && (
+        <div className="rule-hair px-6 py-3 text-[13px] leading-relaxed text-ink-soft sm:px-8">
+          {report.insufficientSignal ? (
+            <p>
+              <strong className="font-semibold text-ink">Not enough code to grade.</strong> There
+              was little or no source to inspect, so this is not a passing grade — it just means we
+              couldn&apos;t tell. Point us at the real project to get a meaningful result.
+            </p>
+          ) : (
+            <p>
+              <strong className="font-semibold text-ink">No issues found in source.</strong> Our
+              source checks didn&apos;t flag anything — a good sign, but read the limits below.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* The craft rundown — every area, worst first */}
       <div className="rule-hair grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 sm:grid-cols-4 sm:px-8">
         {report.categories.map((cat) => (
           <div key={cat.id}>
@@ -98,6 +162,21 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* What a source scan cannot see — the honesty box */}
+      <div className="rule-hair px-6 py-4 sm:px-8">
+        <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
+          What this scan can&apos;t see
+        </p>
+        <ul className="mt-2.5 space-y-1.5">
+          {report.limitations.map((l, i) => (
+            <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-ink-soft">
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-mute" />
+              <span>{l}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
