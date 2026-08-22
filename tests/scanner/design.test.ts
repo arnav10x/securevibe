@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanDirectory } from '@/lib/scanner';
 import type { Finding, ScanResult } from '@/lib/scanner';
-import { letterGrade, securityScore } from '@/lib/scanner/grade';
+import { letterGrade, assessSecurity } from '@/lib/scanner/grade';
 import { fakeRegistryFetch, FIXED_NOW } from './helpers';
 
 const FIXTURE = path.join(
@@ -148,12 +148,12 @@ describe('vibe fixture: professional-standard rules', () => {
 });
 
 describe('vibe fixture: the report card', () => {
-  it('exists and grades this repo poorly', () => {
+  it('exists and grades this repo poorly on craft', () => {
     const card = result.stats.report!;
     expect(card).toBeDefined();
-    expect(card.designScore).toBeLessThan(50);
+    expect(card.craftScore).toBeLessThan(50);
     expect(card.vibeScore).toBeGreaterThan(70);
-    expect(['D+', 'D', 'D-', 'F']).toContain(card.grade);
+    expect(['D+', 'D', 'D-', 'F']).toContain(card.craftGrade);
   });
 
   it('scores all eight categories, worst first', () => {
@@ -181,17 +181,68 @@ describe('grading arithmetic', () => {
     expect(letterGrade(59)).toBe('F');
   });
 
-  it('weights security findings by severity', () => {
-    const finding = (severity: Finding['severity']): Finding => ({
+  it('gives a perfect security score to a repo with no findings', () => {
+    const a = assessSecurity([]);
+    expect(a.score).toBe(100);
+    expect(a.grade).toBe('A+');
+    expect(a.clean).toBe(true);
+    expect(a.capReason).toBeNull();
+  });
+
+  it('caps the grade at F for a PROVEN critical, whatever else is clean', () => {
+    const f: Finding = {
       checkType: 'secret',
-      severity,
-      title: 't',
+      severity: 'critical',
+      confidence: 'verified',
+      title: 'A live secret is committed',
       explanation: 'e',
       recommendation: 'r',
-    });
-    expect(securityScore([])).toBe(100);
-    expect(securityScore([finding('critical')])).toBe(78);
-    expect(securityScore([finding('low')])).toBe(99);
+    };
+    const a = assessSecurity([f]);
+    expect(a.grade).toBe('F');
+    expect(a.score).toBeLessThanOrEqual(40);
+    expect(a.capReason).toMatch(/Capped at F/);
+  });
+
+  it('caps a proven high at C, not lower', () => {
+    const a = assessSecurity([
+      { checkType: 'secret', severity: 'high', confidence: 'verified', title: 'h', explanation: 'e', recommendation: 'r' },
+    ]);
+    expect(a.score).toBeLessThanOrEqual(76);
+    expect(['C', 'C-', 'C+']).toContain(a.grade);
+    expect(a.capReason).toMatch(/Capped at C/);
+  });
+
+  it('never lets a wall of heuristic guesses fail the grade', () => {
+    const guesses: Finding[] = Array.from({ length: 40 }, (_, i) => ({
+      checkType: 'insecure_pattern',
+      severity: 'high',
+      confidence: 'heuristic',
+      ruleId: `guess-${i}`,
+      title: `guess ${i}`,
+      explanation: 'e',
+      recommendation: 'r',
+    }));
+    const a = assessSecurity(guesses);
+    // Heuristic deductions are capped, so the floor is B-, never F.
+    expect(a.score).toBeGreaterThanOrEqual(80);
+    expect(a.capReason).toBeNull();
+  });
+
+  it('does not let a secret planted in a test file cap the grade', () => {
+    const a = assessSecurity([
+      {
+        checkType: 'secret',
+        severity: 'critical',
+        confidence: 'verified',
+        filePath: 'tests/fixtures/planted.test.ts',
+        title: 'planted key',
+        explanation: 'e',
+        recommendation: 'r',
+      },
+    ]);
+    expect(a.score).toBeGreaterThan(76); // not capped to F by a test-only find
+    expect(a.capReason).toBeNull();
   });
 });
 
@@ -202,7 +253,7 @@ describe('clean fixture stays clean', () => {
       { fetchImpl: fakeRegistryFetch, now: FIXED_NOW },
     );
     expect(clean.findings.filter((f) => f.checkType === 'design')).toHaveLength(0);
-    expect(clean.stats.report!.designScore).toBe(100);
+    expect(clean.stats.report!.craftScore).toBe(100);
     expect(clean.stats.report!.vibeScore).toBe(0);
   });
 });

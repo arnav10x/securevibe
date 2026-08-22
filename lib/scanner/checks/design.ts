@@ -765,7 +765,7 @@ export class DesignAnalyzer {
         vibeWeight: 0.9,
         explanation:
           'The README is the scaffold default — the first thing anyone ' +
-          '(投资人, contributors, customers doing due diligence) sees on ' +
+          '(investors, contributors, customers doing due diligence) sees on ' +
           'GitHub, and it currently says "nobody has touched this".',
         recommendation:
           'Three honest paragraphs beat the template: what the product does, ' +

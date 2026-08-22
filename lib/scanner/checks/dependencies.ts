@@ -1,9 +1,14 @@
 // Check 3: dependency risk.
 //
-// Every package named in package.json / requirements.txt is verified against
-// the REAL npm / PyPI registry. AI coding tools sometimes invent plausible
-// package names that don't exist ("slopsquatting") — attackers register
-// those names with malware, and the next `npm install` pulls it in.
+// Two questions, not one:
+//   1. Does this package even exist? AI tools invent plausible names
+//      ("slopsquatting"); attackers register them with malware.
+//   2. Does the version you use have a KNOWN vulnerability? Verified against
+//      OSV.dev (free, aggregates GitHub Advisories + PyPA), the same data
+//      `npm audit` uses — which the old check never looked at.
+//
+// Exact versions come from a lockfile when present (a fact); otherwise we fall
+// back to the floor of the declared range (a strong guess, flagged as such).
 
 import path from 'node:path';
 import type { Finding, PackageCache, PackageInfo, RegistryName, ScannerOptions } from '../types';
@@ -11,6 +16,8 @@ import type { WalkedFile } from '../walk';
 import { LIMITS } from '../limits';
 import { lookupNpmPackage } from '../registry/npm';
 import { lookupPypiPackage } from '../registry/pypi';
+import { queryOsv, type OsvEcosystem, type OsvQuery } from '../registry/osv';
+import { versionFromSpec } from '../util';
 
 const NEW_PACKAGE_DAYS = 30;
 const LOW_DOWNLOADS_PER_WEEK = 500;
@@ -18,6 +25,8 @@ const LOW_DOWNLOADS_PER_WEEK = 500;
 interface DependencyRef {
   registry: RegistryName;
   name: string;
+  /** The raw version spec as declared, e.g. "^1.2.0" or "==2.3.1". */
+  spec: string;
   manifestPath: string;
 }
 
@@ -42,7 +51,7 @@ export function parsePackageJson(relPath: string, content: string): DependencyRe
       if (typeof spec !== 'string' || isNonRegistrySpec(spec)) continue;
       // Basic npm name validity — anything weirder is likely a parse artifact.
       if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/i.test(name)) continue;
-      refs.push({ registry: 'npm', name, manifestPath: relPath });
+      refs.push({ registry: 'npm', name, spec, manifestPath: relPath });
     }
   }
   return refs;
@@ -58,7 +67,8 @@ export function parseRequirementsTxt(relPath: string, content: string): Dependen
     // Name is everything before extras/version specifiers: "requests[socks]>=2.0"
     const match = /^([A-Za-z0-9][A-Za-z0-9._-]*)/.exec(line);
     if (!match) continue;
-    refs.push({ registry: 'pypi', name: match[1], manifestPath: relPath });
+    const spec = line.slice(match[0].length).replace(/^\[[^\]]*\]/, ''); // drop extras
+    refs.push({ registry: 'pypi', name: match[1], spec, manifestPath: relPath });
   }
   return refs;
 }
@@ -68,6 +78,47 @@ function isManifest(relPath: string): 'npm' | 'pypi' | null {
   if (base === 'package.json') return 'npm';
   if (/^requirements[^/]*\.txt$/.test(base)) return 'pypi';
   return null;
+}
+
+/**
+ * Exact installed versions from a lockfile, keyed "registry:name" (lowercased).
+ * Only package-lock.json (npm) is parsed today — it is reliable JSON and
+ * covers most vibe-coded repos. yarn/pnpm lockfiles fall back to spec floors.
+ */
+export function buildVersionIndex(files: { file: WalkedFile; content: string }[]): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const { file, content } of files) {
+    if (path.posix.basename(file.relPath).toLowerCase() !== 'package-lock.json') continue;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(content) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    // npm lockfile v2/v3: { packages: { "node_modules/lodash": { version } } }
+    const packages = parsed['packages'] as Record<string, { version?: string }> | undefined;
+    if (packages) {
+      for (const [key, meta] of Object.entries(packages)) {
+        const m = key.match(/node_modules\/((?:@[^/]+\/)?[^/]+)$/);
+        if (m && meta?.version) index.set(`npm:${m[1].toLowerCase()}`, meta.version);
+      }
+    }
+    // npm lockfile v1: { dependencies: { lodash: { version } } } (recursive)
+    const walkV1 = (deps: Record<string, { version?: string; dependencies?: unknown }>) => {
+      for (const [name, meta] of Object.entries(deps)) {
+        if (meta?.version && !index.has(`npm:${name.toLowerCase()}`)) {
+          index.set(`npm:${name.toLowerCase()}`, meta.version);
+        }
+        const nested = meta?.dependencies as Record<string, { version?: string }> | undefined;
+        if (nested) walkV1(nested as Record<string, { version?: string; dependencies?: unknown }>);
+      }
+    };
+    const v1 = parsed['dependencies'] as
+      | Record<string, { version?: string; dependencies?: unknown }>
+      | undefined;
+    if (v1 && !packages) walkV1(v1);
+  }
+  return index;
 }
 
 /** Simple concurrency pool so we don't blast the registries. */
@@ -107,6 +158,8 @@ export async function checkDependencies(
     .filter(({ file }) => isManifest(file.relPath) !== null)
     .slice(0, LIMITS.MAX_MANIFESTS);
 
+  const versionIndex = buildVersionIndex(files);
+
   const byKey = new Map<string, DependencyRef>();
   for (const { file, content } of manifests) {
     const kind = isManifest(file.relPath);
@@ -123,6 +176,15 @@ export async function checkDependencies(
   const refs = Array.from(byKey.values()).slice(0, LIMITS.MAX_PACKAGES);
   const findings: Finding[] = [];
   let lookupFailures = 0;
+
+  // A resolved (existing) package + the version we'll ask OSV about.
+  interface Resolved {
+    ref: DependencyRef;
+    version: string;
+    /** true when the version came from a lockfile (exact), not a range floor. */
+    exact: boolean;
+  }
+  const resolved: Resolved[] = [];
 
   await mapWithConcurrency(refs, LIMITS.REGISTRY_CONCURRENCY, async (ref) => {
     let info: PackageInfo | null = (await cache?.get(ref.registry, ref.name)) ?? null;
@@ -145,6 +207,8 @@ export async function checkDependencies(
       findings.push({
         checkType: 'dependency',
         severity: 'high',
+        confidence: 'verified', // the registry itself returned 404
+        ruleId: 'dep-nonexistent',
         title: `Dependency "${ref.name}" does not exist on ${registryLabel}`,
         explanation:
           `Your project declares "${ref.name}" as a dependency, but no such ` +
@@ -162,12 +226,20 @@ export async function checkDependencies(
       return;
     }
 
+    // The package exists — line it up for a known-vulnerability lookup.
+    const key = `${ref.registry}:${ref.name.toLowerCase()}`;
+    const lockVersion = versionIndex.get(key);
+    const version = lockVersion ?? versionFromSpec(ref.spec) ?? undefined;
+    if (version) resolved.push({ ref, version, exact: Boolean(lockVersion) });
+
     if (info.publishedAt) {
       const ageDays = (now.getTime() - new Date(info.publishedAt).getTime()) / 86_400_000;
       if (ageDays >= 0 && ageDays < NEW_PACKAGE_DAYS) {
         findings.push({
           checkType: 'dependency',
           severity: 'medium',
+          confidence: 'heuristic',
+          ruleId: 'dep-new',
           title: `Dependency "${ref.name}" is very new (${Math.max(1, Math.round(ageDays))} days old)`,
           explanation:
             `"${ref.name}" was first published less than ${NEW_PACKAGE_DAYS} days ago. ` +
@@ -186,6 +258,8 @@ export async function checkDependencies(
       findings.push({
         checkType: 'dependency',
         severity: 'low',
+        confidence: 'heuristic',
+        ruleId: 'dep-low-downloads',
         title: `Dependency "${ref.name}" has very few downloads`,
         explanation:
           `"${ref.name}" gets fewer than ${LOW_DOWNLOADS_PER_WEEK} downloads a week. ` +
@@ -198,6 +272,54 @@ export async function checkDependencies(
       });
     }
   });
+
+  // ── known-vulnerability lookup (OSV.dev) ────────────────────────────────
+  if (!options.skipVulnerabilityLookup && resolved.length > 0) {
+    const queries: OsvQuery[] = resolved.map((r) => ({
+      key: `${r.ref.registry}:${r.ref.name.toLowerCase()}@${r.version}`,
+      ecosystem: (r.ref.registry === 'npm' ? 'npm' : 'PyPI') as OsvEcosystem,
+      name: r.ref.name,
+      version: r.version,
+    }));
+    const vulnMap = await queryOsv(queries, fetchImpl);
+
+    for (const r of resolved) {
+      const qKey = `${r.ref.registry}:${r.ref.name.toLowerCase()}@${r.version}`;
+      const vulns = vulnMap.get(qKey);
+      if (!vulns || vulns.length === 0) continue;
+
+      // One finding per package at its worst severity; list the rest in text.
+      const rank = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+      const worst = [...vulns].sort((a, b) => rank[a.severity] - rank[b.severity])[0];
+      const idList = vulns
+        .map((v) => v.aliases.find((a) => a.startsWith('CVE-')) ?? v.id)
+        .slice(0, 5)
+        .join(', ');
+      const more = vulns.length > 5 ? ` (+${vulns.length - 5} more)` : '';
+
+      findings.push({
+        checkType: 'dependency',
+        severity: worst.severity,
+        // Exact (lockfile) version match is a fact; a range-floor guess is 'likely'.
+        confidence: r.exact ? 'verified' : 'likely',
+        ruleId: 'dep-known-vuln',
+        title: `"${r.ref.name}" ${r.version} has ${vulns.length === 1 ? 'a known vulnerability' : `${vulns.length} known vulnerabilities`}`,
+        explanation:
+          `The version of "${r.ref.name}" your project uses (${r.version}` +
+          `${r.exact ? '' : ', inferred from your version range — check your lockfile'}) ` +
+          `has published security ${vulns.length === 1 ? 'advisory' : 'advisories'}: ${idList}${more}. ` +
+          (worst.summary ? `The most serious: ${worst.summary} ` : '') +
+          'Known vulnerabilities are the ones attackers scan for first, ' +
+          'because the exploit is already public.',
+        filePath: r.ref.manifestPath,
+        evidenceMasked: worst.reference ?? undefined,
+        recommendation:
+          `Update "${r.ref.name}" to a patched version (run "npm audit fix" ` +
+          'for npm, or bump the version and reinstall). If no fix exists yet, ' +
+          'check the advisory for a workaround or a maintained alternative.',
+      });
+    }
+  }
 
   return { findings, packagesChecked: refs.length, lookupFailures };
 }

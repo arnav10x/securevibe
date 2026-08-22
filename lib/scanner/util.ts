@@ -52,6 +52,71 @@ export function looksBinary(buffer: Buffer): boolean {
   return slice.includes(0);
 }
 
+/**
+ * True for files that are tests, fixtures, mocks, or examples — code that is
+ * not shipped to users. Secrets planted in a test must not fail the whole
+ * app's security grade (they are still reported, just not counted as the app
+ * being broken). Mirrors the exclusion the design audit already applies.
+ */
+export function isTestPath(relPath: string): boolean {
+  return (
+    /(?:^|\/)(?:tests?|__tests__|__mocks__|fixtures?|e2e|cypress|playwright|stories|\.storybook|examples?|samples?)\//i.test(
+      relPath,
+    ) || /\.(?:test|spec|stories|fixture|mock)\.[cm]?[jt]sx?$/i.test(relPath)
+  );
+}
+
+/**
+ * A deliberately small .gitignore matcher — enough to answer one question:
+ * "would git ignore this env file?" It understands the patterns that actually
+ * appear for env files (`.env`, `.env*`, `*.local`, `.env.local`, a leading
+ * slash, a trailing slash for dirs). It is not a full gitignore engine and
+ * does not try to be; when unsure it returns false (safer to warn than to
+ * silently clear a real leak).
+ */
+export function makeGitignoreMatcher(gitignoreContent: string | null): (relPath: string) => boolean {
+  if (!gitignoreContent) return () => false;
+  const patterns = gitignoreContent
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#') && !l.startsWith('!'));
+
+  const regexes = patterns.map((raw) => {
+    let p = raw.replace(/\/$/, ''); // trailing slash (dir) — treat as name
+    const anchored = p.startsWith('/');
+    if (anchored) p = p.slice(1);
+    // Escape regex metachars except * and ?, which are globs.
+    const body = p
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '[^/]');
+    // Anchored patterns match from root; unanchored match any path segment.
+    return new RegExp(anchored ? `^${body}(?:/|$)` : `(?:^|/)${body}(?:/|$)`);
+  });
+
+  return (relPath: string) => regexes.some((re) => re.test(relPath));
+}
+
+/**
+ * Pull a concrete version out of a package.json / requirements spec so we can
+ * ask a vuln database about it. Returns the exact version when the spec pins
+ * one (`1.2.3`, `==1.2.3`, `=1.2.3`, `v1.2.3`), or the FLOOR of a caret/tilde
+ * range (`^1.2.3` -> `1.2.3`) — the floor is the version most likely still
+ * installed on an app that never ran `npm update`. Returns null when the spec
+ * is a tag, URL, or wildcard we cannot resolve to a number.
+ */
+export function versionFromSpec(spec: string): string | null {
+  const s = spec.trim();
+  if (!s || s === '*' || s === 'latest' || s === 'x') return null;
+  const m = s.match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?|\d+\.\d+|\d+)/);
+  if (!m) return null;
+  // Normalize partials like "1" or "1.2" to a full semver for the DB.
+  const parts = m[1].split('+')[0].split('-')[0].split('.');
+  while (parts.length < 3) parts.push('0');
+  const pre = m[1].includes('-') ? m[1].slice(m[1].indexOf('-')) : '';
+  return parts.slice(0, 3).join('.') + pre;
+}
+
 /** Decode a base64url JWT segment; returns null if it isn't valid JSON. */
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.');

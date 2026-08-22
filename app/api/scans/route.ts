@@ -224,6 +224,9 @@ export async function POST(request: Request) {
     scan: (dir) =>
       scanDirectory(body.sourceType === 'zip' ? path.join(dir, 'source') : dir, {
         packageCache,
+        // Tells the scanner whether a committed .env is provable (github) or
+        // only a warning (zip) — see the git-awareness fix in checks/secrets.
+        sourceType: body.sourceType,
       }),
     persistFindings: async (findings) => {
       if (findings.length === 0) return;
@@ -231,6 +234,7 @@ export async function POST(request: Request) {
         scan_id: scan.id,
         check_type: f.checkType,
         severity: f.severity,
+        confidence: f.confidence ?? 'heuristic',
         title: f.title,
         explanation: f.explanation,
         file_path: f.filePath ?? null,

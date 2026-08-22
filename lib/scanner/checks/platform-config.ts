@@ -23,6 +23,8 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
         findings.push({
           checkType: 'platform_config',
           severity: 'critical',
+          confidence: 'verified',
+          ruleId: 'firebase-allow-if-true',
           title: 'Firebase rules allow public access to your data',
           explanation:
             'This security rule says "allow ... if true", which means ANYONE ' +
@@ -52,6 +54,8 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
         findings.push({
           checkType: 'platform_config',
           severity: 'critical',
+          confidence: 'verified',
+          ruleId: 'firebase-realtime-open',
           title: 'Firebase Realtime Database is publicly readable/writable',
           explanation:
             `The rule at ${p || 'the database root'} is set to true, which ` +
@@ -77,6 +81,8 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
         findings.push({
           checkType: 'platform_config',
           severity: 'high',
+          confidence: 'verified',
+          ruleId: 'rls-disabled',
           title: 'Row Level Security is explicitly disabled on a table',
           explanation:
             'Row Level Security (RLS) is the mechanism that stops one user ' +
@@ -108,6 +114,8 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
         findings.push({
           checkType: 'platform_config',
           severity: 'medium',
+          confidence: 'likely',
+          ruleId: 'policy-public-read',
           title: 'A table is readable by everyone (policy USING (true))',
           explanation:
             'This policy makes every row in the table readable by anyone. ' +
@@ -124,6 +132,8 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
         findings.push({
           checkType: 'platform_config',
           severity: 'high',
+          confidence: 'likely',
+          ruleId: 'policy-public-write',
           title: 'A table is writable by everyone (policy USING (true))',
           explanation:
             'This policy applies to write operations with no condition, so ' +
@@ -144,6 +154,8 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
       findings.push({
         checkType: 'platform_config',
         severity: 'medium',
+        confidence: 'heuristic',
+        ruleId: 'table-no-rls',
         title: 'Tables are created without Row Level Security',
         explanation:
           'This migration creates tables but never enables Row Level ' +
