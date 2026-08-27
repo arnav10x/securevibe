@@ -122,7 +122,7 @@ export function Alert({
     <div
       role="alert"
       className={cx(
-        'flex items-start gap-3 rounded-lg border border-[var(--line)] border-l-[3px]',
+        'flex items-start gap-3 rounded-xl border border-[var(--line)] border-l-[3px]',
         'bg-sheet px-4 py-3 text-sm leading-relaxed',
         tones[tone].classes,
       )}

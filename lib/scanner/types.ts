@@ -95,8 +95,15 @@ export interface ReportCard {
    * of how clean everything else is.
    */
   securityCapReason: string | null;
-  /** Count of security findings by severity, for the at-a-glance strip. */
+  /**
+   * Count of security findings by severity, for the at-a-glance strip.
+   * SHIPPED code only — findings in test and fixture files are counted in
+   * testOnlyCount instead, because planted test credentials are the fixture
+   * working as intended, not an exploitable leak.
+   */
   tally: Record<Severity, number>;
+  /** Security findings that live in test or fixture files. Reported apart. */
+  testOnlyCount: number;
   /** True when code was scanned and zero security findings were filed. */
   clean: boolean;
   /**

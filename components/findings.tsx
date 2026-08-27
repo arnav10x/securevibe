@@ -69,7 +69,11 @@ export function FindingAccordion({
   typeLabel?: string;
 }) {
   const color = SEVERITY_COLOR[f.severity] ?? SEVERITY_COLOR.low;
-  const fileShort = f.filePath?.split('/').pop() ?? null;
+  // Show the parent directory too. A bare basename hides where the finding
+  // lives, so "tests/fixtures/.env" reads as a committed ".env" at the root.
+  const fileShort = f.filePath
+    ? f.filePath.split('/').slice(-2).join('/')
+    : null;
 
   return (
     <details

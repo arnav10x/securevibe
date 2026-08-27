@@ -4,6 +4,7 @@
 import path from 'node:path';
 import type { Finding } from '../types';
 import { PATTERN_RULES } from '../rules/insecure-patterns';
+import { isPatternDefinitionLine, matchIsInsideProseString } from '../util';
 
 export function checkCodePatternsInFile(relPath: string, content: string): Finding[] {
   const ext = path.posix.extname(relPath).toLowerCase();
@@ -21,9 +22,17 @@ export function checkCodePatternsInFile(relPath: string, content: string): Findi
     if (trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('*')) {
       continue; // commented-out code is not a live vulnerability
     }
+    // A line that DEFINES a pattern is not a line that runs it. Without this
+    // the scanner flags its own rule definitions, and every linter config or
+    // WAF rule list it ever scans.
+    if (isPatternDefinitionLine(line)) continue;
 
     for (const rule of rules) {
-      if (!rule.regex.test(line)) continue;
+      const match = rule.regex.exec(line);
+      if (!match) continue;
+      // The pattern described in prose ("new Function() builds code from
+      // strings") is documentation, not a call. Skip it.
+      if (matchIsInsideProseString(line, match.index)) continue;
       const key = `${rule.id}:${i}`;
       if (seen.has(key)) continue;
       seen.add(key);

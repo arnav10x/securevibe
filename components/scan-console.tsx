@@ -188,7 +188,7 @@ export function ScanConsole() {
             </label>
 
             {error && (
-              <div className="mt-4 rounded-lg border border-signal/70 bg-ultra-deep px-4 py-3 text-sm leading-relaxed text-bone">
+              <div className="mt-4 rounded-xl border border-signal/70 bg-ultra-deep px-4 py-3 text-sm leading-relaxed text-bone">
                 {error}{' '}
                 {limitHit && (
                   <Link href="/signup" className="u-link font-semibold text-bone hover:text-bone">

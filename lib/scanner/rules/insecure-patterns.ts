@@ -78,7 +78,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'sql-string-concat',
     title: 'SQL query built with string concatenation',
     severity: 'high',
-    regex: /(["'])\s*(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^"']*\1\s*\+/i,
+    regex: /(["'])\s*(?:SELECT\b[^`"\x27]*?\bFROM|INSERT\s+INTO|UPDATE\b[^`"\x27]*?\bSET|DELETE\s+FROM)\b[^"']*\1\s*\+/i,
     extensions: JS,
     explanation:
       'This SQL query is glued together with + from pieces of text. If any ' +
@@ -92,7 +92,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'sql-template-literal',
     title: 'SQL query built with template-string interpolation',
     severity: 'high',
-    regex: /`[^`]*\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^`]*\$\{/i,
+    regex: /`[^`]*\b(?:SELECT\b[^`"\x27]*?\bFROM|INSERT\s+INTO|UPDATE\b[^`"\x27]*?\bSET|DELETE\s+FROM)\b[^`]*\$\{/i,
     extensions: JS,
     explanation:
       'This SQL query has a ${...} variable directly inside it. If that ' +
@@ -106,7 +106,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'python-sql-fstring',
     title: 'SQL query built with an f-string',
     severity: 'high',
-    regex: /f["'][^"']*\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^"']*\{/i,
+    regex: /f["'][^"']*\b(?:SELECT\b[^`"\x27]*?\bFROM|INSERT\s+INTO|UPDATE\b[^`"\x27]*?\bSET|DELETE\s+FROM)\b[^"']*\{/i,
     extensions: PY,
     explanation:
       'This SQL query has a Python f-string variable inside it. If user ' +
@@ -119,7 +119,7 @@ export const PATTERN_RULES: PatternRule[] = [
     id: 'python-sql-format',
     title: 'SQL query built with %-formatting or .format()',
     severity: 'high',
-    regex: /["'][^"']*\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^"']*["']\s*(?:%\s*\(|\.format\s*\()/i,
+    regex: /["'][^"']*\b(?:SELECT\b[^`"\x27]*?\bFROM|INSERT\s+INTO|UPDATE\b[^`"\x27]*?\bSET|DELETE\s+FROM)\b[^"']*["']\s*(?:%\s*\(|\.format\s*\()/i,
     extensions: PY,
     explanation:
       'This SQL query is assembled with string formatting. If user input ' +
@@ -240,7 +240,12 @@ export const PATTERN_RULES: PatternRule[] = [
     severity: 'high',
     confidence: 'likely',
     // Flags dangerouslySetInnerHTML fed a variable/expression, not a constant.
-    regex: /dangerouslySetInnerHTML\s*=\s*\{\{\s*__html:\s*(?!["'`])/,
+    // The lookahead must sit BEFORE the whitespace: with `\s*(?!["'`])` the
+    // engine backtracks `\s*` to zero width, the lookahead then inspects the
+    // space instead of the quote, and every constant string fires.
+    // The backtick exclusion forbids `$` inside, so an interpolated template
+    // (`${userBio}`) still fires while a fixed one does not.
+    regex: /dangerouslySetInnerHTML\s*=\s*\{\{\s*__html:(?!\s*["'][^"']*["']\s*\}\})(?!\s*`[^`$]*`\s*\}\})/,
     extensions: JS,
     explanation:
       'dangerouslySetInnerHTML renders raw HTML without React’s protection. ' +

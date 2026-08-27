@@ -109,24 +109,39 @@ export function checkPlatformConfigInFile(relPath: string, content: string): Fin
       if (!isPermissiveTrue) continue;
       const lineStart = content.slice(0, match.index).split('\n').length;
       const forSelectOnly = /for\s+select/i.test(stmt);
+      // A policy granted only TO authenticated is not readable by "everyone" —
+      // a signed-out visitor gets nothing. Postgres defaults to PUBLIC (which
+      // includes the anon role) when no TO clause is present, so only the
+      // explicit authenticated-only case is narrowed here.
+      const signedInOnly =
+        /\bto\s+authenticated\b/i.test(stmt) && !/\bto\s+[\w\s,]*\b(?:anon|public)\b/i.test(stmt);
 
       if (forSelectOnly) {
         findings.push({
           checkType: 'platform_config',
-          severity: 'medium',
+          severity: signedInOnly ? 'low' : 'medium',
           confidence: 'likely',
-          ruleId: 'policy-public-read',
-          title: 'A table is readable by everyone (policy USING (true))',
-          explanation:
-            'This policy makes every row in the table readable by anyone. ' +
-            'That is sometimes intentional (e.g. public blog posts) — but if ' +
-            'this table holds user data, it is a leak.',
+          ruleId: signedInOnly ? 'policy-any-user-read' : 'policy-public-read',
+          title: signedInOnly
+            ? 'A table is readable by every signed-in user (policy USING (true))'
+            : 'A table is readable by everyone (policy USING (true))',
+          explanation: signedInOnly
+            ? 'This policy lets any signed-in user read every row in the ' +
+              'table. Signed-out visitors get nothing, so this is fine for ' +
+              'shared reference data. It is a leak only if the rows belong to ' +
+              'individual users.'
+            : 'This policy makes every row in the table readable by anyone, ' +
+              'including signed-out visitors. That is sometimes intentional ' +
+              '(public blog posts). If this table holds user data, it is a leak.',
           filePath: relPath,
           lineStart,
           evidenceMasked: stmt.split('\n')[0].trim().slice(0, 160),
-          recommendation:
-            'If the data is meant to be public, you can ignore this. ' +
-            'Otherwise change USING (true) to USING (auth.uid() = user_id).',
+          recommendation: signedInOnly
+            ? 'If the rows are shared reference data, this is correct as ' +
+              'written. If any row belongs to one user, scope it with ' +
+              'USING (auth.uid() = user_id).'
+            : 'If the data is meant to be public, you can ignore this. ' +
+              'Otherwise change USING (true) to USING (auth.uid() = user_id).',
         });
       } else {
         findings.push({

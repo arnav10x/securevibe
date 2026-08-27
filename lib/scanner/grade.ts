@@ -97,7 +97,10 @@ export interface SecurityAssessment {
   score: number;
   grade: string;
   capReason: string | null;
+  /** Severity counts for SHIPPED code. Test/fixture findings are excluded. */
   tally: Record<Severity, number>;
+  /** How many findings landed in test or fixture files. Reported separately. */
+  testOnlyCount: number;
   /** True when zero security findings were filed against real code. */
   clean: boolean;
 }
@@ -109,8 +112,16 @@ export interface SecurityAssessment {
  */
 export function assessSecurity(findings: Finding[]): SecurityAssessment {
   const security = findings.filter((f) => SECURITY_TYPES.has(f.checkType));
+  // The headline tally counts SHIPPED code only. A test fixture full of
+  // planted keys is the fixture doing its job, and counting those as
+  // "critical, directly exploitable" is the scanner crying wolf about
+  // deliberate test data. They are still reported, in their own group.
   const tally: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
-  for (const f of security) tally[f.severity]++;
+  let testOnly = 0;
+  for (const f of security) {
+    if (f.filePath && isTestPath(f.filePath)) testOnly++;
+    else tally[f.severity]++;
+  }
 
   // ── weighted deductions with diminishing returns per rule ──────────────
   // Repeated hits of the same rule matter less each time (the 20th missing
@@ -165,7 +176,8 @@ export function assessSecurity(findings: Finding[]): SecurityAssessment {
     grade: letterGrade(score),
     capReason,
     tally,
-    clean: security.length === 0,
+    testOnlyCount: testOnly,
+    clean: security.length - testOnly === 0,
   };
 }
 
@@ -301,6 +313,7 @@ export function buildReportCard(
     securityScore: sec.score,
     securityCapReason: sec.capReason,
     tally: sec.tally,
+    testOnlyCount: sec.testOnlyCount,
     clean: sec.clean && !insufficientSignal,
     insufficientSignal,
     limitations: SOURCE_SCAN_LIMITATIONS,
