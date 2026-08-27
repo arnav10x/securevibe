@@ -45,3 +45,8 @@ next-env.d.ts
 
 # fixture env files must be committed (they are fake test data)
 !tests/fixtures/**/.env
+
+# Local agent tooling (installed skills), not project code
+.agents/
+.claude/skills/
+skills-lock.json
