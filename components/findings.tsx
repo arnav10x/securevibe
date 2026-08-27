@@ -5,6 +5,8 @@
 
 import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
+import { buildFixPrompt } from '@/lib/scanner/fix-prompt';
+import { DESIGN_RULES } from '@/lib/scanner/rules/design-rules';
 
 export const SEVERITY_COLOR: Record<string, string> = {
   critical: 'var(--color-critical)',
@@ -34,19 +36,22 @@ const CONFIDENCE_LABEL: Record<string, { label: string; title: string }> = {
 
 /**
  * A ready-to-paste prompt for the user's AI coding tool — the way a
- * non-technical founder actually fixes things. Built purely from the finding.
+ * non-technical founder actually fixes things. Follows the template from
+ * SECUREVIBE.md 4.2: context, problem, bounded task, constraints, and a
+ * verify step. Rules that define their own verification step get it; the
+ * rest fall back to a generic check.
  */
 export function fixPrompt(f: FindingView): string {
-  const where = f.filePath ? `${f.filePath}${f.lineStart ? `:${f.lineStart}` : ''}` : 'my project';
-  return [
-    `Fix this security issue in ${where}.`,
-    ``,
-    `Problem: ${f.title}`,
-    `Why it matters: ${f.explanation}`,
-    `How to fix it: ${f.recommendation}`,
-    ``,
-    `Make the change, then explain in plain English what you changed and why.`,
-  ].join('\n');
+  const rule = DESIGN_RULES.find((r) => r.title === f.title);
+  return buildFixPrompt({
+    title: f.title,
+    explanation: f.explanation,
+    recommendation: f.recommendation,
+    filePath: f.filePath,
+    lineStart: f.lineStart,
+    evidenceMasked: f.evidenceMasked,
+    verify: rule?.verify ?? null,
+  });
 }
 
 export function FindingAccordion({

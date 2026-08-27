@@ -63,10 +63,10 @@ export interface ScanStats {
   report?: ReportCard;
 }
 
-/** One graded area of the design audit, e.g. "Typography" or "Originality". */
+/** One graded layer of the craft audit, e.g. "Design tokens" or "State coverage". */
 export interface DesignCategoryScore {
   id: string;
-  /** Display name, e.g. "Typography & hierarchy" */
+  /** Display name, e.g. "State coverage" */
   label: string;
   /** 0–100, higher is better */
   score: number;
@@ -107,11 +107,24 @@ export interface ReportCard {
   /** Honest, plain-English list of what a source scan cannot see. */
   limitations: string[];
 
-  // ── Craft (secondary — how finished/original the build looks) ────────
-  /** Craft letter grade (design polish + originality). */
+  // ── Craft (secondary — how much judgment shows after generation) ─────
+  /** Craft letter grade. */
   craftGrade: string;
   /** 0–100 craft score. */
   craftScore: number;
+  /**
+   * When the accessibility floor caps the craft score, this says why.
+   * An interface keyboard users cannot operate is not well designed,
+   * whatever it looks like. null when nothing caps it.
+   */
+  craftCapReason: string | null;
+  /**
+   * The headline verdict: one plain sentence naming what the repo reads
+   * as, derived from the craft and security scores together. Never a
+   * bare number — a number invites argument, a sentence with cited
+   * findings under it does not.
+   */
+  verdict: string;
   /**
    * 0–100: how strongly the project pattern-matches unedited AI-generated
    * output. 0 reads human-crafted; 100 is a wall of template tells.
@@ -119,8 +132,15 @@ export interface ReportCard {
   vibeScore: number;
   /** Plain-words reading of the vibe meter, e.g. "A few template tells". */
   vibeVerdict: string;
-  /** Craft areas with individual scores, worst first. */
+  /** Craft layers with individual scores, worst first. */
   categories: DesignCategoryScore[];
+  /**
+   * Workflow markers found in the repo (agent instruction files, generator
+   * fingerprints). Context only — they never move a score. Recorded because
+   * a disciplined AI-assisted workflow is worth knowing about, not
+   * penalizing.
+   */
+  provenance: string[];
 }
 
 export interface ScanResult {
@@ -167,4 +187,17 @@ export interface ScannerOptions {
   sourceType?: 'github' | 'zip';
   /** Turn off the network CVE lookup (OSV) — used by offline tests. */
   skipVulnerabilityLookup?: boolean;
+  /**
+   * Optional model-assisted detection (SECUREVIBE.md stage 5). OFF unless an
+   * API key is provided — the scanner is fully deterministic by default and
+   * never sends code anywhere. When enabled, only short visible-text
+   * excerpts (marketing copy) are sent, one named signal per call, and the
+   * model returns binary verdicts with citations — never scores.
+   */
+  llm?: {
+    apiKey: string;
+    /** OpenAI-compatible API root; defaults to Groq's free-tier endpoint. */
+    baseUrl?: string;
+    model?: string;
+  };
 }

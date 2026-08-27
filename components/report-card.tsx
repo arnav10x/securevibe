@@ -45,6 +45,15 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
 
   return (
     <div className="plate overflow-hidden">
+      {/* The headline verdict — one plain sentence naming what the repo
+          reads as. It leads the report because a sentence with cited
+          findings under it persuades where a bare number invites argument. */}
+      {report.verdict && (
+        <div className="border-b border-[var(--line)] px-6 py-4 sm:px-8">
+          <p className="label">Verdict</p>
+          <p className="prose-serif mt-1.5 text-[17px] leading-snug text-ink">{report.verdict}</p>
+        </div>
+      )}
       <div className="flex flex-wrap items-stretch">
         {/* The Security grade — the headline of the whole report */}
         <div className="flex items-center gap-5 border-r border-[var(--line)] px-6 py-5 sm:px-8">
@@ -108,9 +117,11 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
         </div>
       </div>
 
-      {/* Why the grade is capped — the single most useful line when it applies */}
-      {report.securityCapReason && (
-        <div className="rule-hair px-6 py-3 sm:px-8">
+      {/* Why a grade is capped — the single most useful line when it applies.
+          Security caps come from proven findings; the craft cap is the
+          accessibility floor, stated rather than hidden in the number. */}
+      {[report.securityCapReason, report.craftCapReason].filter(Boolean).map((reason) => (
+        <div key={reason} className="rule-hair px-6 py-3 sm:px-8">
           <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
             <span
               className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
@@ -118,10 +129,10 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
             >
               Capped
             </span>
-            <span>{report.securityCapReason}</span>
+            <span>{reason}</span>
           </p>
         </div>
-      )}
+      ))}
 
       {/* Insufficient-signal / clean honesty banner */}
       {(report.insufficientSignal || report.clean) && (
@@ -178,6 +189,17 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
           ))}
         </ul>
       </div>
+
+      {/* Workflow context — recorded, never scored. A CLAUDE.md marks a
+          disciplined workflow, not a defect. */}
+      {report.provenance && report.provenance.length > 0 && (
+        <div className="rule-hair px-6 py-3 sm:px-8">
+          <p className="text-[12px] leading-relaxed text-ink-mute">
+            <span className="font-semibold text-ink-soft">Workflow context (not scored):</span>{' '}
+            {report.provenance.join(' · ')}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

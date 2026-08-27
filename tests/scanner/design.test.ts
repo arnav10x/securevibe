@@ -1,14 +1,16 @@
-// Scans the deliberately vibe-coded fixture app and asserts the design
+// Scans the deliberately vibe-coded fixture app and asserts the craft
 // audit catches every planted tell — and that the report card grades it
-// harshly. The clean fixture must stay clean (no design noise on a repo
-// with no UI).
+// harshly. The clean fixture must stay clean (no craft noise on a repo
+// with no UI). This doubles as the calibration guard from SECUREVIBE.md
+// 5.6: the vibe cluster and the clean cluster must stay separated.
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanDirectory } from '@/lib/scanner';
 import type { Finding, ScanResult } from '@/lib/scanner';
-import { letterGrade, assessSecurity } from '@/lib/scanner/grade';
+import { letterGrade, assessSecurity, assessCraft, verdictFor } from '@/lib/scanner/grade';
+import type { LayerHit } from '@/lib/scanner/checks/design';
 import { fakeRegistryFetch, FIXED_NOW } from './helpers';
 
 const FIXTURE = path.join(
@@ -32,20 +34,24 @@ function findByTitle(fragment: string): Finding | undefined {
 }
 
 describe('vibe fixture: the dead giveaways', () => {
-  it('spots the classic AI landing-page template', () => {
-    const f = findByTitle('landing-page template');
+  it('spots the canonical generated page sequence', () => {
+    const f = findByTitle('page sequence');
     expect(f).toBeDefined();
     expect(f!.filePath).toBe('app/page.tsx');
     expect(f!.explanation).toContain('FAQ');
   });
 
-  it('spots the purple gradient and gradient text', () => {
-    expect(findByTitle('purple-gradient')).toBeDefined();
-    expect(findByTitle('Gradient text')).toBeDefined();
+  it('spots the multi-hue gradient as structure, never as a hue', () => {
+    const f = findByTitle('Multi-hue gradient');
+    expect(f).toBeDefined();
+    // The hard rule from 1.11: flag structure, never chroma. The finding
+    // must not read as criticizing a color by name.
+    expect(f!.explanation.toLowerCase()).not.toMatch(/purple is|pink is/);
+    expect(findByTitle('Gradient fill on heading')).toBeDefined();
   });
 
-  it('spots the neon glow orb', () => {
-    expect(findByTitle('glow')).toBeDefined();
+  it('spots the decorative glow orbs', () => {
+    expect(findByTitle('blur orbs')).toBeDefined();
   });
 
   it('spots emoji used as interface graphics', () => {
@@ -93,8 +99,8 @@ describe('vibe fixture: the dead giveaways', () => {
   });
 
   it('spots the setTimeout-faked backend and the coming-soon alert', () => {
-    expect(findByTitle('Fake loading state')).toBeDefined();
-    expect(findByTitle('Coming soon')).toBeDefined();
+    expect(findByTitle('timer, not a request')).toBeDefined();
+    expect(findByTitle('coming soon')).toBeDefined();
   });
 
   it('spots dead links and social stubs', () => {
@@ -108,7 +114,7 @@ describe('vibe fixture: the dead giveaways', () => {
   });
 
   it('spots the AI placeholder comment in the login page', () => {
-    expect(findByTitle('placeholder comment')).toBeDefined();
+    expect(findByTitle('Placeholder comment')).toBeDefined();
   });
 });
 
@@ -138,12 +144,12 @@ describe('vibe fixture: professional-standard rules', () => {
   });
 
   it('flags low-contrast text pairs', () => {
-    expect(findByTitle('Low-contrast')).toBeDefined();
+    expect(findByTitle('too close in luminance')).toBeDefined();
   });
 
-  it('flags lorem ipsum and the generic Submit button', () => {
-    expect(findByTitle('Lorem ipsum')).toBeDefined();
-    expect(findByTitle('Generic button')).toBeDefined();
+  it('flags lorem ipsum and the mechanism-named button', () => {
+    expect(findByTitle('Placeholder latin')).toBeDefined();
+    expect(findByTitle('mechanism')).toBeDefined();
   });
 });
 
@@ -156,11 +162,21 @@ describe('vibe fixture: the report card', () => {
     expect(['D+', 'D', 'D-', 'F']).toContain(card.craftGrade);
   });
 
-  it('scores all eight categories, worst first', () => {
+  it('scores all seven craft layers, worst first', () => {
     const card = result.stats.report!;
-    expect(card.categories).toHaveLength(8);
+    expect(card.categories).toHaveLength(7);
     const scores = card.categories.map((c) => c.score);
     expect([...scores].sort((a, b) => a - b)).toEqual(scores);
+    const ids = card.categories.map((c) => c.id).sort();
+    expect(ids).toEqual(
+      ['accessibility', 'copy', 'layout', 'motion', 'states', 'tokens', 'typography'].sort(),
+    );
+  });
+
+  it('carries a plain-sentence verdict, never a bare number', () => {
+    const card = result.stats.report!;
+    expect(card.verdict.length).toBeGreaterThan(20);
+    expect(card.verdict).not.toMatch(/\d\d\/100/);
   });
 
   it('files every design finding under the design check type', () => {
@@ -169,6 +185,71 @@ describe('vibe fixture: the report card', () => {
       expect(f.severity).not.toBe('critical'); // critical is reserved for security
       expect(f.recommendation.length).toBeGreaterThan(20);
     }
+  });
+});
+
+describe('craft scoring arithmetic (SECUREVIBE.md 5.3)', () => {
+  const hit = (over: Partial<LayerHit>): LayerHit => ({
+    ruleId: 'x',
+    title: 'A finding title',
+    layer: 'tokens',
+    severity: 'high',
+    count: 1,
+    vibeWeight: 0,
+    loadBearing: false,
+    ...over,
+  });
+
+  it('scores 100 with no hits', () => {
+    const a = assessCraft([]);
+    expect(a.score).toBe(100);
+    expect(a.capReason).toBeNull();
+  });
+
+  it('amplifies clusters: extra signals in one layer cost half', () => {
+    const one = assessCraft([hit({ ruleId: 'a' })]).score;
+    const two = assessCraft([hit({ ruleId: 'a' }), hit({ ruleId: 'b' })]).score;
+    const firstCost = 100 - one;
+    const secondCost = one - two;
+    expect(secondCost).toBeLessThan(firstCost);
+    expect(secondCost).toBeGreaterThan(0);
+  });
+
+  it('caps craft at 60 when a load-bearing accessibility item fails', () => {
+    const a = assessCraft([
+      hit({ layer: 'accessibility', severity: 'medium', loadBearing: true, title: 'Focus outline removed without a replacement' }),
+    ]);
+    expect(a.score).toBe(60);
+    expect(a.capReason).toContain('Capped at 60');
+  });
+
+  it('states verdict bands from the craft/exposure pair', () => {
+    const clean = assessCraft([]);
+    const secure = assessSecurity([]);
+    expect(verdictFor(clean, secure, false)).toContain('Built with judgment');
+
+    const leaky = assessSecurity([
+      {
+        checkType: 'secret',
+        severity: 'critical',
+        confidence: 'verified',
+        title: 'A live secret is committed',
+        explanation: 'e',
+        recommendation: 'r',
+      },
+    ]);
+    expect(verdictFor(clean, leaky, false)).toContain('not safe to ship');
+
+    const generated = assessCraft([
+      hit({ ruleId: 'a', layer: 'tokens' }),
+      hit({ ruleId: 'b', layer: 'states' }),
+      hit({ ruleId: 'c', layer: 'copy' }),
+      hit({ ruleId: 'd', layer: 'layout' }),
+      hit({ ruleId: 'e', layer: 'typography' }),
+      hit({ ruleId: 'f', layer: 'motion' }),
+    ]);
+    expect(generated.score).toBeLessThan(55);
+    expect(verdictFor(generated, secure, false)).toMatch(/generated|Unreviewed/);
   });
 });
 
@@ -200,8 +281,7 @@ describe('grading arithmetic', () => {
     };
     const a = assessSecurity([f]);
     expect(a.grade).toBe('F');
-    expect(a.score).toBeLessThanOrEqual(40);
-    expect(a.capReason).toMatch(/Capped at F/);
+    expect(a.capReason).toContain('a live secret is committed');
   });
 
   it('caps a proven high at C, not lower', () => {
@@ -246,8 +326,8 @@ describe('grading arithmetic', () => {
   });
 });
 
-describe('clean fixture stays clean', () => {
-  it('produces no design findings and a perfect design score', async () => {
+describe('clean fixture stays clean (calibration separation)', () => {
+  it('produces no design findings and a perfect craft score', async () => {
     const clean = await scanDirectory(
       path.join(fileURLToPath(new URL('.', import.meta.url)), '../fixtures/clean-app'),
       { fetchImpl: fakeRegistryFetch, now: FIXED_NOW },
@@ -255,5 +335,8 @@ describe('clean fixture stays clean', () => {
     expect(clean.findings.filter((f) => f.checkType === 'design')).toHaveLength(0);
     expect(clean.stats.report!.craftScore).toBe(100);
     expect(clean.stats.report!.vibeScore).toBe(0);
+    // The 5.6 requirement: the two clusters stay separated by 25+ points.
+    expect(clean.stats.report!.craftScore - result.stats.report!.craftScore)
+      .toBeGreaterThanOrEqual(25);
   });
 });

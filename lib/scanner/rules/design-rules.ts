@@ -1,40 +1,62 @@
-// Rules for Check 5: the design audit ("does this look vibe coded?").
+// Rules for the craft audit: does this repository show human judgment
+// applied after generation?
+//
+// The detection model comes from SECUREVIBE.md (the master reference).
+// Signals live in seven layers, weighted strongest first:
+//
+//   A. Design token system   — does a design system exist at all?
+//   B. State coverage        — empty, loading, error, partial states
+//   C. Typography system     — scale, hierarchy discipline
+//   D. Interaction & motion  — feedback, purposeful animation
+//   E. Structural layout     — grid discipline, content-model thinking
+//   F. Copy and content      — voice, specificity, honesty
+//   G. Accessibility floor   — below the floor, the craft score is capped
 //
 // Two kinds of rules live here:
 //   - line rules: a regex tested against each line of UI/CSS files
-//   - file rules: a regex run across a whole file (for tags that span lines)
-// Aggregate checks that need to see the WHOLE project (font count, color
-// count, the template landing-page shape) live in checks/design.ts.
+//   - file rules: a regex run across a whole file (for tags spanning lines)
+// Aggregate checks that need the WHOLE project (token ratios, state
+// coverage, the template page sequence) live in checks/design.ts.
 //
-// Every rule cites where the standard comes from, because "an algorithm
-// disliked your site" convinces nobody — "WCAG 1.4.4 requires this" does.
+// HARD RULES this file must obey (the anti-heuristic list):
+//   - Never flag a hue. Flag structure, never chroma.
+//   - Never flag a typeface, framework, or library by name.
+//   - Never compare the repo to a named company's product.
+//   - Provenance markers (CLAUDE.md, .cursorrules) are context, not penalty.
+//   - Never flag a named style (dark mode, glassmorphism, brutalism).
+// The voice rules are enforced by tests/scanner/voice.test.ts, which runs
+// every string in this file through the language filter in ../voice.ts.
 
 import type { Severity } from '../types';
 
-/** The graded areas of the design audit. Weights must sum to 100. */
-export const DESIGN_CATEGORIES = [
-  { id: 'originality', label: 'Originality', weight: 18 },
-  { id: 'accessibility', label: 'Accessibility', weight: 16 },
-  { id: 'content', label: 'Content integrity', weight: 14 },
-  { id: 'typography', label: 'Typography', weight: 12 },
-  { id: 'color', label: 'Color discipline', weight: 10 },
-  { id: 'layout', label: 'Layout & responsiveness', weight: 10 },
-  { id: 'consistency', label: 'Consistency', weight: 10 },
-  { id: 'polish', label: 'Finish & polish', weight: 10 },
+/**
+ * The seven craft layers and their share of the craft score.
+ * Weights must sum to 100. Order matters: strongest evidence first.
+ */
+export const CRAFT_LAYERS = [
+  { id: 'tokens', label: 'Design tokens', weight: 22 },
+  { id: 'states', label: 'State coverage', weight: 20 },
+  { id: 'typography', label: 'Typography', weight: 15 },
+  { id: 'motion', label: 'Interaction & motion', weight: 13 },
+  { id: 'layout', label: 'Structural layout', weight: 12 },
+  { id: 'copy', label: 'Copy & content', weight: 10 },
+  { id: 'accessibility', label: 'Accessibility floor', weight: 8 },
 ] as const;
 
-export type DesignCategoryId = (typeof DESIGN_CATEGORIES)[number]['id'];
+export type CraftLayerId = (typeof CRAFT_LAYERS)[number]['id'];
 
 export interface DesignRule {
   id: string;
   title: string;
   severity: Severity;
-  category: DesignCategoryId;
+  layer: CraftLayerId;
   /** 'line': regex tested per line. 'file': regex run over the whole file. */
   scope: 'line' | 'file';
   regex: RegExp;
   /** A line/file matching this is NOT flagged even if `regex` matches. */
   unless?: RegExp;
+  /** Extra structural check on the matched line, for logic a regex cannot say. */
+  test?: (line: string) => boolean;
   /** File extensions this rule applies to (with the dot). */
   extensions: Set<string>;
   /** Line rules normally skip comment lines; set true to scan them too. */
@@ -42,12 +64,20 @@ export interface DesignRule {
   /** How many individual findings to file before folding the rest into a note. */
   maxFindings: number;
   /**
-   * 0–1: how strongly a hit says "unedited AI output". 0 for rules that are
-   * just bad craft (a human can ship bad contrast too).
+   * 0–1: how strongly a hit says "unreviewed model output". 0 for rules that
+   * are plain craft gaps (a person can ship bad contrast too).
    */
   vibeWeight: number;
+  /**
+   * Marks a Layer G rule as load-bearing: when one fires, the craft score is
+   * capped at 60 no matter what else the report says. An interface keyboard
+   * users cannot operate is not well designed, whatever it looks like.
+   */
+  loadBearing?: boolean;
   explanation: string;
   recommendation: string;
+  /** The check a coding agent runs to confirm the fix landed. */
+  verify?: string;
 }
 
 /** Files that carry markup the user actually sees. */
@@ -57,92 +87,304 @@ export const CSS = new Set(['.css', '.scss', '.sass', '.less']);
 const UI_AND_CSS = new Set([...UI, ...CSS]);
 const UI_AND_JS = new Set([...UI, '.js', '.ts', '.mjs']);
 
+/** The default framework hue families, for structural (never chromatic) checks. */
+const HUE_FAMILY =
+  /\b(?:from|via|to)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/g;
+
 export const DESIGN_RULES: DesignRule[] = [
-  // ───────────────────────── originality: the dead giveaways ─────────────────────────
+  // ─────────────── Layer A: design token system ───────────────
   {
-    id: 'vibe-gradient-cliche',
-    title: 'The purple-gradient cliché',
+    id: 'tokens-multi-hue-gradient',
+    title: 'Multi-hue gradient as a surface treatment',
     severity: 'high',
-    category: 'originality',
+    layer: 'tokens',
     scope: 'line',
-    regex:
-      /\bbg-gradient-to-[trbl]{1,2}\b(?=.*\bfrom-(?:purple|indigo|violet|fuchsia|pink|blue|cyan)-\d{2,3}\b)/,
+    regex: /\bbg-gradient-to-[trbl]{1,2}\b/,
+    test: (line) => {
+      const families = new Set<string>();
+      for (const m of line.matchAll(new RegExp(HUE_FAMILY.source, 'g'))) {
+        families.add(m[1]);
+      }
+      return families.size >= 2;
+    },
     extensions: UI,
     maxFindings: 3,
     vibeWeight: 0.9,
     explanation:
-      'A purple/indigo/pink gradient is the single most recognizable signature ' +
-      'of AI-generated design — every default v0, Lovable, and Bolt site ships ' +
-      'one. Visitors who have seen ten of these this week will assume yours is ' +
-      'template output too, and judge the product accordingly.',
+      'This gradient crosses more than one hue family. The multi-hue sweep is ' +
+      'the highest-frequency default in generated output and it carries no ' +
+      'information about this product. The issue is structure, not the colors ' +
+      'themselves. A single-hue gradient in a tight value range is a real ' +
+      'craft choice and is not flagged.',
     recommendation:
-      'Pick one real brand color and use it flat. Look at Stripe, Linear, or ' +
-      'Vercel: restrained, mostly-neutral palettes with a single accent read ' +
-      'as far more expensive than any gradient.',
+      'Decide what this surface should say, then say it with one hue. Either ' +
+      'flatten to your brand color or tighten the gradient to two close ' +
+      'values of a single family.',
+    verify:
+      'Search UI files for bg-gradient utilities whose from/via/to stops span ' +
+      'more than one color family. None should remain on large surfaces.',
   },
   {
-    id: 'vibe-gradient-text',
-    title: 'Gradient text on a heading',
+    id: 'tokens-gradient-text',
+    title: 'Gradient fill on heading text',
     severity: 'medium',
-    category: 'originality',
+    layer: 'tokens',
     scope: 'line',
     regex: /(?=.*\bbg-clip-text\b)(?=.*\btext-transparent\b)/,
     extensions: UI,
     maxFindings: 2,
     vibeWeight: 0.85,
     explanation:
-      'Gradient-filled headline text (bg-clip-text + text-transparent) is a ' +
-      'default flourish of AI site builders. It is rarely seen on professional ' +
-      'products, so it instantly marks a page as generated.',
+      'Gradient-filled headline text is a stock generative flourish. It adds ' +
+      'a second visual treatment to the one element that should already win ' +
+      'attention on its own, so it weakens hierarchy instead of building it.',
     recommendation:
-      'Set the headline in a single strong color — near-black on light ' +
-      'backgrounds, near-white on dark. Let the words carry the drama.',
+      'Set the headline in one strong color with high contrast against its ' +
+      'background. Let size, weight, and surrounding space do the work.',
+    verify: 'Search for bg-clip-text paired with text-transparent. Headings should not match.',
   },
   {
-    id: 'vibe-neon-glow',
-    title: 'Neon glow / blur-orb decoration',
+    id: 'tokens-glow-orbs',
+    title: 'Decorative blur orbs behind content',
     severity: 'medium',
-    category: 'originality',
+    layer: 'tokens',
     scope: 'line',
     regex:
-      /(?=.*\bblur-[23]xl\b)(?=.*\b(?:bg|from)-(?:purple|indigo|violet|fuchsia|pink|cyan|blue|emerald)-\d{2,3})|\bshadow-\[0_0_\d+px[^\]]*\]/,
+      /(?=.*\bblur-[23]xl\b)(?=.*\b(?:bg|from)-[a-z]+-\d{2,3})|\bshadow-\[0_0_\d+px[^\]]*\]/,
     extensions: UI,
     maxFindings: 3,
     vibeWeight: 0.8,
     explanation:
-      'Blurred neon orbs floating behind the hero (blur-3xl on a colored div) ' +
-      'and glow shadows are stock AI-template decoration. Like the gradient, ' +
-      'they signal "nobody designed this" to anyone who has seen the pattern.',
+      'Blurred glow shapes floating behind the hero are stock template ' +
+      'decoration. They add luminance noise around the exact area where one ' +
+      'element should hold attention, and they answer no question a visitor ' +
+      'has.',
     recommendation:
-      'Delete the glow divs. Whitespace, a good typeface, and one accent color ' +
-      'do the work these effects are trying to fake.',
+      'Delete the glow divs. Whitespace and one clear focal element do the ' +
+      'work this decoration is imitating.',
+    verify: 'Search for blur-2xl and blur-3xl on positioned decorative divs. None should remain.',
   },
+
+  // ─────────────── Layer B: state coverage ───────────────
   {
-    id: 'vibe-emoji-ui',
-    title: 'Emoji used as interface graphics',
+    id: 'states-simulated-backend',
+    title: 'Loading state driven by a timer, not a request',
     severity: 'high',
-    category: 'originality',
+    layer: 'states',
     scope: 'line',
-    // Excludes ©®™, arrows, and check marks — legitimate typography, not emoji.
-    regex: /(?![©®™←-⇿✓✔✖✗])\p{Extended_Pictographic}/u,
+    regex:
+      /await\s+new\s+Promise\(\s*\(?(\w+)\)?\s*=>\s*setTimeout\(\s*\1\s*,\s*\d{3,5}\s*\)\s*\)|setTimeout\(\s*\(\)\s*=>\s*\{?\s*set(?:Loading|IsLoading|Submitting|Success|Sent|Subscribed|Complete)\w*\(\s*false\s*\)/,
     extensions: UI,
-    maxFindings: 4,
+    maxFindings: 3,
     vibeWeight: 0.85,
     explanation:
-      'Emoji standing in for icons (🚀 on the feature cards, ✨ in the hero) ' +
-      'are a hallmark of AI-generated pages — models reach for them because ' +
-      'they cost nothing. They render differently on every OS, clash with any ' +
-      'real brand, and make a product look like a group chat.',
+      'A spinner driven by setTimeout with no request behind it performs work ' +
+      'the code is not doing. The form appears to submit, the toast reports ' +
+      'success, and nothing was saved. People find out after trusting the ' +
+      'product with their data.',
     recommendation:
-      'Replace each emoji with a real icon from one consistent set (Lucide ' +
-      'and Heroicons are free) — or with nothing. Text alone is cleaner than ' +
-      'text plus 🎯.',
+      'Wire the handler to a real endpoint. If the feature has no backend ' +
+      'yet, remove its UI. A smaller honest product beats a demo posing as ' +
+      'one.',
+    verify:
+      'Search for setTimeout calls that flip loading or success state. Every ' +
+      'pending state should be driven by an actual awaited request.',
   },
   {
-    id: 'vibe-user-count',
-    title: 'Unverifiable user-count claim',
+    id: 'states-dead-end-button',
+    title: 'Button that answers with a "coming soon" message',
+    severity: 'medium',
+    layer: 'states',
+    scope: 'line',
+    regex:
+      /(?:alert|toast)\(\s*["'`][^"'`]*(?:coming soon|not (?:yet )?(?:implemented|available)|under construction)/i,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.8,
+    explanation:
+      'A control that pops "coming soon" is a dead end dressed as a feature. ' +
+      'Each click on one teaches the visitor that other controls may also be ' +
+      'hollow.',
+    recommendation:
+      'Hide unfinished features instead of stubbing them. Ship the three ' +
+      'controls that work, not ten that apologize.',
+    verify: 'Search for alert and toast calls containing "coming soon". None should remain.',
+  },
+  {
+    id: 'states-swallowed-error',
+    title: 'Error caught and discarded',
+    severity: 'medium',
+    layer: 'states',
+    scope: 'file',
+    regex: /catch\s*(?:\([^)]*\))?\s*\{\s*\}/g,
+    extensions: UI_AND_JS,
+    maxFindings: 3,
+    vibeWeight: 0.4,
+    explanation:
+      'An empty catch block swallows the failure. The user sees nothing, the ' +
+      'developer sees nothing, and the interface silently stops matching ' +
+      'reality. This is the most common state-coverage gap in unreviewed ' +
+      'output.',
+    recommendation:
+      'Handle the failure where it happens: show an error state that names ' +
+      'what failed and offers a retry, and report the exception somewhere a ' +
+      'developer will see it.',
+    verify: 'Search for empty catch blocks. Each should render or report the error.',
+  },
+
+  // ─────────────── Layer C: typography ───────────────
+  {
+    id: 'type-below-floor',
+    title: 'Text below the legibility floor',
+    severity: 'medium',
+    layer: 'typography',
+    scope: 'line',
+    regex: /\btext-\[(?:[0-9]|1[01])px\]|font-size:\s*(?:[0-9]|1[01])px\b/,
+    extensions: UI_AND_CSS,
+    maxFindings: 3,
+    vibeWeight: 0,
+    explanation:
+      'Text under 12px is unreadable for a large share of users, and it ' +
+      'fails at small sizes long before it fails a checker. Body copy reads ' +
+      'comfortably at 14px to 16px.',
+    recommendation:
+      'Raise it to at least 12px, and reserve even that for labels and ' +
+      'captions. Body copy belongs at 14px or larger.',
+    verify: 'Search for font sizes below 12px. None should remain in user-facing text.',
+  },
+  {
+    id: 'type-offscale-size',
+    title: 'One-off font size outside the scale',
+    severity: 'low',
+    layer: 'typography',
+    scope: 'line',
+    regex: /\btext-\[\d+(?:px|rem)\]/,
+    // On-scale sizes are fine; below-12px sizes belong to the legibility rule.
+    unless: /\btext-\[(?:[0-9]|1[01]|12|14|16|18|20|24|30|36|48|60|72|96|128)px\]/,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.2,
+    explanation:
+      'Arbitrary sizes like 13px or 17px mean each piece of type was ' +
+      'negotiated per element instead of coming from a scale. A type scale is ' +
+      'a set of decided steps, and scattered one-off values are the mark that ' +
+      'no decision was made.',
+    recommendation:
+      'Snap each one-off value to the nearest step of your scale. If you need ' +
+      'a custom size, define it once in the theme instead of inline.',
+    verify: 'Search for bracketed one-off text sizes. Each should map to a scale step.',
+  },
+
+  // ─────────────── Layer D: interaction and motion ───────────────
+  {
+    id: 'motion-transition-all',
+    title: 'transition-all animating every property',
+    severity: 'low',
+    layer: 'motion',
+    scope: 'line',
+    regex: /\btransition-all\b/,
+    extensions: UI,
+    maxFindings: 2,
+    vibeWeight: 0.3,
+    explanation:
+      'transition-all animates properties that should never animate, ' +
+      'including layout-affecting ones the browser cannot composite. The ' +
+      'result is a laggy feel on interactions that should be instant.',
+    recommendation:
+      'Name the properties you mean: transition-colors for color changes, ' +
+      'transition-transform for movement. Animate only transform and opacity ' +
+      'where you can.',
+    verify: 'Search for transition-all. Each use should name specific properties instead.',
+  },
+  {
+    id: 'motion-glacial-duration',
+    title: 'Transition slower than the usable band',
+    severity: 'low',
+    layer: 'motion',
+    scope: 'line',
+    regex: /\bduration-(?:700|1000)\b/,
+    unless: /animate-|@keyframes/,
+    extensions: UI,
+    maxFindings: 2,
+    vibeWeight: 0.2,
+    explanation:
+      'Transitions above roughly 400ms on frequent interactions make the ' +
+      'interface feel like it is waiting for itself. Small elements moving ' +
+      'short distances read best between 100ms and 300ms.',
+    recommendation:
+      'Drop interactive transitions to 150ms to 300ms. Reserve longer ' +
+      'durations for large surfaces that cross the screen.',
+    verify: 'Search for duration-700 and duration-1000 on hover and press interactions.',
+  },
+
+  // ─────────────── Layer E: structural layout ───────────────
+  {
+    id: 'layout-fixed-width',
+    title: 'Fixed pixel width wider than a phone',
+    severity: 'medium',
+    layer: 'layout',
+    scope: 'line',
+    regex:
+      /(?<!max-)(?<!min-)\bw-\[(?:4\d\d|[5-9]\d\d|\d{4,})px\]|(?<![-\w])width:\s*(?:4\d\d|[5-9]\d\d|\d{4,})px/,
+    unless: /\bmax-w-full\b|\bmd:|\blg:|@media/,
+    extensions: UI_AND_CSS,
+    maxFindings: 3,
+    vibeWeight: 0,
+    explanation:
+      'A hard width of 400px or more with no responsive override forces ' +
+      'horizontal scrolling on phones, where more than half of first visits ' +
+      'happen. Content must reflow to 320px without sideways scrolling.',
+    recommendation:
+      'Use a fluid width with a ceiling: w-full plus max-w-[480px] instead of ' +
+      'w-[480px], so the element shrinks with the screen.',
+    verify: 'Load the page at 320px wide. Nothing should scroll horizontally.',
+  },
+  {
+    id: 'layout-fixed-height',
+    title: 'Fixed height on a container holding variable content',
+    severity: 'low',
+    layer: 'layout',
+    scope: 'line',
+    regex: /\bh-\[(?:[3-9]\d\d|\d{4,})px\]/,
+    unless: /overflow-(?:auto|y-auto|scroll)|\bmin-h-/,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.3,
+    explanation:
+      'A hardcoded height on a content container means the layout was ' +
+      'designed against one example, not against a content model. Longer ' +
+      'text clips, shorter text floats in dead space.',
+    recommendation:
+      'Let the container size itself from its content, or set min-h with ' +
+      'overflow handling when a ceiling is genuinely needed.',
+    verify: 'Fill the container with twice the current content. Nothing should clip.',
+  },
+
+  // ─────────────── Layer F: copy and content ───────────────
+  {
+    id: 'copy-lorem',
+    title: 'Placeholder latin shipped in user-facing text',
     severity: 'high',
-    category: 'content',
+    layer: 'copy',
+    scope: 'line',
+    regex: /lorem ipsum|dolor sit amet/i,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.75,
+    explanation:
+      'Placeholder latin in visible text is the universal mark of an ' +
+      'unfinished page. It tells every visitor the site shipped without ' +
+      'anyone reading it.',
+    recommendation:
+      'Write the real sentence. If a section has nothing real to say yet, ' +
+      'remove the section. A shorter honest page beats a padded one.',
+    verify: 'Search the project for "lorem ipsum". No user-facing file should match.',
+  },
+  {
+    id: 'copy-fabricated-user-count',
+    title: 'User-count claim with nothing behind it',
+    severity: 'high',
+    layer: 'copy',
     scope: 'line',
     regex:
       /(?:trusted by|join(?:ed)?(?: by)?|loved by|used by)\s*(?:over\s*)?[\d,.]+k?\+?\s*(?:users|developers|devs|teams|customers|companies|founders|creators|builders)|[\d,]{4,}\+\s*(?:happy\s+)?(?:users|developers|customers|downloads|teams)/i,
@@ -150,41 +392,123 @@ export const DESIGN_RULES: DesignRule[] = [
     maxFindings: 3,
     vibeWeight: 0.9,
     explanation:
-      '"Trusted by 10,000+ developers" on a product that launched last week is ' +
-      'the most common fake claim in AI-generated landing pages — the model ' +
-      'invents a number because real landing pages have one. Anyone who checks ' +
-      '(and competitors will) can call it a lie, which poisons trust in ' +
-      'everything else on the page.',
+      'A "trusted by 10,000 developers" line on a product that launched last ' +
+      'week is a claim anyone can check and no one can verify. Fabricated ' +
+      'social proof is the fastest credibility destroyer a page can carry, ' +
+      'and it creates real legal exposure in advertising law.',
     recommendation:
-      'Delete the number or make it true. Early products earn more trust from ' +
-      'honesty: "in early access", "built in the open", or a real testimonial ' +
-      'from a real person with their permission.',
+      'Delete the number or make it true. Specific honest claims read as ' +
+      'true: "in early access" or a real quote from a real person with their ' +
+      'permission.',
+    verify: 'Search for user-count phrases. Every remaining claim should be verifiable.',
   },
   {
-    id: 'vibe-hardcoded-testimonials',
-    title: 'Hardcoded testimonial data',
+    id: 'copy-fabricated-testimonials',
+    title: 'Testimonial data hardcoded in the page source',
     severity: 'medium',
-    category: 'content',
+    layer: 'copy',
     scope: 'line',
     regex: /(?:const|let|var)\s+(?:testimonials|reviews|customerQuotes)\s*(?::[^=]+)?=\s*\[/i,
     extensions: UI_AND_JS,
     maxFindings: 2,
     vibeWeight: 0.6,
     explanation:
-      'A testimonials array hardcoded in the page source usually means the ' +
-      'quotes were invented by the model ("Sarah K., Product Manager"). ' +
-      'Fabricated endorsements are the fastest way to lose a visitor who ' +
-      'senses it — and in many jurisdictions they are illegal advertising.',
+      'A testimonials array in the source usually means the quotes were ' +
+      'invented during generation. Fabricated endorsements poison trust on ' +
+      'discovery and are illegal advertising in many jurisdictions.',
     recommendation:
-      'If the quotes are real, keep them (hardcoding real quotes is fine). If ' +
-      'they were generated, remove the section entirely until you have real ' +
-      'ones — an honest page without testimonials outperforms a fake one.',
+      'If the quotes are real, keep them. If they were generated, remove the ' +
+      'section until real ones exist. An honest page without testimonials ' +
+      'outperforms a fake one.',
+    verify: 'Confirm every quoted person exists and approved their quote.',
   },
   {
-    id: 'vibe-default-meta',
-    title: 'Scaffold title/description still shipping',
+    id: 'copy-fabricated-stats',
+    title: 'Stock credibility statistics',
+    severity: 'medium',
+    layer: 'copy',
+    scope: 'line',
+    regex: /\b99\.9%(?:\s*uptime)?|\b24\/7\s+(?:support|customer|human)|\b4\.[89]\s*\/\s*5\b/i,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.6,
+    explanation:
+      'The same three numbers appear on thousands of generated pages: 99.9% ' +
+      'uptime, 24/7 support, a 4.9 rating. If no SLA, support rota, or ' +
+      'ratings page backs the claim, it is fiction a customer can quote back ' +
+      'at you.',
+    recommendation:
+      'Replace invented metrics with something true and specific: your actual ' +
+      'response time, a real capability, or nothing.',
+    verify: 'Each remaining statistic should have a source you could show a customer.',
+  },
+  {
+    id: 'copy-superlative-voice',
+    title: 'Superlative-dense marketing voice',
+    severity: 'low',
+    layer: 'copy',
+    scope: 'line',
+    regex:
+      /\b(?:supercharge[sd]?|revolutioniz\w+|game-?chang\w+|blazing[- ]fast|lightning[- ]fast|next-generation|best-in-class|cutting-edge|in seconds,? not (?:hours|days|weeks))\b|(?:It'?s|This is) not just (?:a|an)\s/i,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.5,
+    explanation:
+      'Superlatives are the statistical average of all marketing copy, which ' +
+      'is why generated pages are dense with them. Readers now parse this ' +
+      'register as machine-written and discount every claim near it. ' +
+      'Specific claims with numbers and named constraints read as true.',
+    recommendation:
+      'Write the way you would explain the product to a friend: what it ' +
+      'does, for whom, and one concrete detail only you can say.',
+    verify: 'Read the page copy aloud. Every sentence should survive being questioned.',
+  },
+  {
+    id: 'copy-template-closer',
+    title: 'The "Ready to…?" closing pitch',
+    severity: 'low',
+    layer: 'copy',
+    scope: 'line',
+    regex:
+      /Ready to (?:get started|level up|take (?:your|control)|streamline|ship|join|build|grow|scale)/i,
+    extensions: UI,
+    maxFindings: 2,
+    vibeWeight: 0.7,
+    explanation:
+      'The rhetorical "Ready to…?" band before the footer closes thousands ' +
+      'of generated pages verbatim. It carries no information a visitor ' +
+      'could not predict.',
+    recommendation:
+      'Close with something specific: what happens in the first five minutes ' +
+      'after signing up, or the product name and the one action.',
+    verify: 'The final call to action should name a concrete outcome.',
+  },
+  {
+    id: 'copy-emoji-ui',
+    title: 'Emoji standing in for interface icons',
     severity: 'high',
-    category: 'polish',
+    layer: 'copy',
+    scope: 'line',
+    // Excludes ©®™, arrows, and check marks — legitimate typography, not emoji.
+    regex: /(?![©®™←-⇿✓✔✖✗])\p{Extended_Pictographic}/u,
+    extensions: UI,
+    maxFindings: 4,
+    vibeWeight: 0.85,
+    explanation:
+      'Emoji used as feature icons render differently on every operating ' +
+      'system, carry no brand identity, and repeat the adjacent word without ' +
+      'adding information. They are frequent in unreviewed output because ' +
+      'they cost the model nothing.',
+    recommendation:
+      'Replace each emoji with an icon from one consistent set, or with ' +
+      'nothing. Text alone is cleaner than text plus a pictograph.',
+    verify: 'Search UI files for emoji characters. Headings and buttons should not match.',
+  },
+  {
+    id: 'copy-scaffold-meta',
+    title: 'Scaffold title still shipping',
+    severity: 'high',
+    layer: 'copy',
     scope: 'line',
     // Anchored to title/meta context so prose that merely mentions the
     // scaffold strings doesn't trip it.
@@ -194,18 +518,19 @@ export const DESIGN_RULES: DesignRule[] = [
     maxFindings: 2,
     vibeWeight: 0.95,
     explanation:
-      'The browser tab still says "Create Next App" (or the meta description ' +
-      'is the scaffold default). It is the first text search engines and users ' +
-      'see, and it announces that nobody looked at the details.',
+      'The browser tab still shows the scaffold default title. It is the ' +
+      'first text search engines and visitors see, and it announces that ' +
+      'nobody looked at the details.',
     recommendation:
-      'Set a real title and description in your root layout metadata: the ' +
-      'product name plus one specific sentence about what it does.',
+      'Set a real title and description in the root metadata: the product ' +
+      'name plus one specific sentence about what it does.',
+    verify: 'Load the site and read the browser tab. It should name the product.',
   },
   {
-    id: 'vibe-ai-comment',
-    title: 'AI placeholder comment left in code',
+    id: 'copy-placeholder-comment',
+    title: 'Placeholder comment documenting unfinished work',
     severity: 'medium',
-    category: 'polish',
+    layer: 'copy',
     scope: 'line',
     includeComments: true,
     regex:
@@ -214,176 +539,19 @@ export const DESIGN_RULES: DesignRule[] = [
     maxFindings: 3,
     vibeWeight: 0.7,
     explanation:
-      'Comments like "In a real app, you would..." are the assistant talking ' +
-      'to the person who prompted it. Left in the repo, they document that ' +
-      'this part was never actually finished — a reviewer or customer reading ' +
-      'the source sees an IOU, not a product.',
+      'Comments like "in a real app, you would…" are the assistant talking ' +
+      'to the person who prompted it. Left in the repo, each one documents a ' +
+      'part that was never finished.',
     recommendation:
-      'Treat each of these comments as a task: either do the real thing it ' +
+      'Treat each of these comments as a task: do the real thing it ' +
       'describes, or delete the feature it excuses. Then delete the comment.',
-  },
-
-  {
-    id: 'vibe-builder-fingerprint',
-    title: 'AI builder fingerprints left in the code',
-    severity: 'high',
-    category: 'originality',
-    scope: 'line',
-    includeComments: true,
-    regex:
-      /lovable-tagger|cdn\.gpteng\.co|data-lov-id|Welcome to your Lovable project|content=["']v0\.dev["']|generator:\s*["']v0\.dev|Made with Bolt|href=["']https:\/\/bolt\.new/i,
-    extensions: new Set([...UI, '.js', '.ts', '.json', '.md']),
-    maxFindings: 2,
-    vibeWeight: 0.95,
-    explanation:
-      'The code carries a literal machine-readable signature of the tool that ' +
-      'generated it (Lovable’s tagger script, v0’s generator meta, Bolt’s ' +
-      'badge). Anyone — including browser extensions built for exactly this — ' +
-      'can read it and label the site "AI-generated" in one click.',
-    recommendation:
-      'Remove the tagger scripts, generator meta tags, and badges from the ' +
-      'build. They serve the platform’s marketing, not yours.',
+    verify: 'Search for placeholder comments. Each should be resolved, not reworded.',
   },
   {
-    id: 'vibe-fake-async',
-    title: 'Fake loading state (setTimeout pretending to be a backend)',
-    severity: 'high',
-    category: 'content',
-    scope: 'line',
-    regex:
-      /await\s+new\s+Promise\(\s*\(?(\w+)\)?\s*=>\s*setTimeout\(\s*\1\s*,\s*\d{3,5}\s*\)\s*\)|setTimeout\(\s*\(\)\s*=>\s*\{?\s*set(?:Loading|IsLoading|Submitting|Success|Sent|Subscribed|Complete)\w*\(\s*false\s*\)/,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.85,
-    explanation:
-      'A spinner driven by setTimeout with no real request behind it means ' +
-      'this feature performs work it is not doing — the form "submits", the ' +
-      'toast says success, and nothing was saved. Users find out the hard ' +
-      'way, usually after trusting you with their data.',
-    recommendation:
-      'Wire the handler to a real endpoint (or a service like Formspree for ' +
-      'simple forms). If the feature has no backend yet, remove the UI for it ' +
-      '— a smaller honest product beats a demo pretending to be one.',
-  },
-  {
-    id: 'vibe-coming-soon-alert',
-    title: '"Coming soon" alert wired to a real-looking button',
-    severity: 'medium',
-    category: 'content',
-    scope: 'line',
-    regex:
-      /(?:alert|toast)\(\s*["'`][^"'`]*(?:coming soon|not (?:yet )?(?:implemented|available)|under construction)/i,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.8,
-    explanation:
-      'Buttons that pop "Coming soon!" are dead ends dressed as features — ' +
-      'the AI’s polite way of not finishing. Every click on one erodes the ' +
-      'visitor’s belief that anything else on the page works.',
-    recommendation:
-      'Hide unfinished features instead of stubbing them. Ship the three ' +
-      'buttons that work, not ten that apologize.',
-  },
-  {
-    id: 'vibe-social-stub',
-    title: 'Social icon linking to a platform homepage',
-    severity: 'medium',
-    category: 'content',
-    scope: 'line',
-    regex:
-      /href\s*=\s*["']https?:\/\/(?:www\.)?(?:twitter|x|github|linkedin|facebook|instagram|discord|youtube)\.(?:com|gg)\/?["']/,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.7,
-    explanation:
-      'A footer Twitter/GitHub icon that links to twitter.com itself — no ' +
-      'account, no path — is a template stub shipped as-is. It tells visitors ' +
-      'the social presence is fictional.',
-    recommendation:
-      'Link each icon to your actual profile, or remove icons for networks ' +
-      'you are not on.',
-  },
-  {
-    id: 'vibe-fake-stats',
-    title: 'Stock credibility statistics',
-    severity: 'medium',
-    category: 'content',
-    scope: 'line',
-    regex: /\b99\.9%(?:\s*uptime)?|\b24\/7\s+(?:support|customer|human)|\b4\.[89]\s*\/\s*5\b/i,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.6,
-    explanation:
-      '"99.9% uptime", "24/7 support", "4.9/5 rating" — the same three ' +
-      'numbers appear on thousands of AI-generated pages because the model ' +
-      'learned that credible sites have metrics. If you cannot back the claim ' +
-      '(an SLA, a support rota, a ratings page), it is fiction a customer can ' +
-      'quote back at you.',
-    recommendation:
-      'Replace invented metrics with something true and specific: your actual ' +
-      'response time, a real capability, or nothing.',
-  },
-  {
-    id: 'vibe-hype-copy',
-    title: 'AI marketing-voice copy',
+    id: 'copy-generation-narration',
+    title: 'Section-narration comments in the markup',
     severity: 'low',
-    category: 'content',
-    scope: 'line',
-    regex:
-      /\b(?:supercharge[sd]?|revolutioniz\w+|game-?chang\w+|blazing[- ]fast|lightning[- ]fast|in seconds,? not (?:hours|days|weeks))\b|(?:It'?s|This is) not just (?:a|an)\s/i,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.5,
-    explanation:
-      '"Supercharge your workflow" and "It’s not just X, it’s Y" are the ' +
-      'model’s house style — readers have now seen this register on so many ' +
-      'generated pages that it actively signals "no human wrote this".',
-    recommendation:
-      'Write the way you would explain the product to a friend: what it does, ' +
-      'for whom, and one concrete detail only you can say.',
-  },
-  {
-    id: 'vibe-ready-to-cta',
-    title: 'The "Ready to…?" closing pitch',
-    severity: 'low',
-    category: 'originality',
-    scope: 'line',
-    regex:
-      /Ready to (?:get started|transform|supercharge|level up|take (?:your|control)|streamline|revolutionize|elevate|ship|join|build)/i,
-    extensions: UI,
-    maxFindings: 2,
-    vibeWeight: 0.7,
-    explanation:
-      'The rhetorical "Ready to transform your workflow?" band before the ' +
-      'footer is verbatim template — the same sentence closes thousands of ' +
-      'generated landing pages.',
-    recommendation:
-      'Close with something specific: what happens in the first five minutes ' +
-      'after signing up, or simply the product name and the one action.',
-  },
-  {
-    id: 'vibe-glassmorphism',
-    title: 'Default glassmorphism cards',
-    severity: 'low',
-    category: 'originality',
-    scope: 'line',
-    regex: /(?=.*\bbg-(?:white|black)\/(?:5|10|20)\b)(?=.*backdrop-blur)/,
-    extensions: UI,
-    maxFindings: 2,
-    vibeWeight: 0.5,
-    explanation:
-      'Semi-transparent white-on-dark cards with backdrop-blur are the AI’s ' +
-      'one move for "premium" dark UIs — recognizable at a glance as ' +
-      'generated styling.',
-    recommendation:
-      'Solid surfaces with a clear border read as more confident. If you keep ' +
-      'blur, use it once (a nav bar), not on every card.',
-  },
-  {
-    id: 'vibe-section-comments',
-    title: 'Section-narration comments in the JSX',
-    severity: 'low',
-    category: 'polish',
+    layer: 'copy',
     scope: 'line',
     includeComments: true,
     regex:
@@ -392,86 +560,219 @@ export const DESIGN_RULES: DesignRule[] = [
     maxFindings: 2,
     vibeWeight: 0.6,
     explanation:
-      '{/* Hero Section */} … {/* CTA Section */} is the model keeping its ' +
-      'place while generating. A full set of these markers documents that the ' +
-      'page came out in one long generation and was never revisited.',
+      'A full set of section markers in one file is the model keeping its ' +
+      'place during a single long generation. It records that the page came ' +
+      'out in one pass and was never revisited.',
     recommendation:
-      'Extract the sections into named components (Hero.tsx, Faq.tsx) — the ' +
-      'names then do the narrating, and the file stops reading like a prompt ' +
-      'transcript.',
+      'Extract the sections into named components. The file names then do ' +
+      'the narrating, and each piece becomes safe to edit alone.',
+    verify: 'The page file should compose named section components, not inline blocks.',
   },
-
-  // ───────────────────────── typography ─────────────────────────
   {
-    id: 'type-illegible-size',
-    title: 'Text below the legibility floor',
+    id: 'copy-social-stub',
+    title: 'Social icon linking to a platform homepage',
     severity: 'medium',
-    category: 'typography',
+    layer: 'copy',
     scope: 'line',
-    regex: /\btext-\[(?:[0-9]|1[01])px\]|font-size:\s*(?:[0-9]|1[01])px\b/,
-    extensions: UI_AND_CSS,
+    regex:
+      /href\s*=\s*["']https?:\/\/(?:www\.)?(?:twitter|x|github|linkedin|facebook|instagram|discord|youtube)\.(?:com|gg)\/?["']/,
+    extensions: UI,
     maxFindings: 3,
-    vibeWeight: 0,
+    vibeWeight: 0.7,
     explanation:
-      'Text under 12px is illegible for a large share of users. Apple’s ' +
-      'Human Interface Guidelines set 11pt as the absolute floor on mobile; ' +
-      'professional products keep body copy at 14–16px.',
+      'A footer social icon that links to the platform itself, with no ' +
+      'account path, is a template stub shipped as-is. It tells visitors the ' +
+      'social presence is fictional.',
     recommendation:
-      'Raise it to at least 12px (text-xs), and reserve even that for labels ' +
-      'and captions — body copy belongs at text-sm/text-base or larger.',
+      'Link each icon to your actual profile, or remove icons for networks ' +
+      'you are not on.',
+    verify: 'Click every social link on the deployed site. Each should reach a real profile.',
   },
   {
-    id: 'type-offscale-size',
-    title: 'Off-scale one-off font size',
-    severity: 'low',
-    category: 'typography',
+    id: 'copy-dead-link',
+    title: 'Link that goes nowhere',
+    severity: 'medium',
+    layer: 'copy',
     scope: 'line',
-    regex: /\btext-\[\d+(?:px|rem)\]/,
-    // On-scale sizes are fine; below-12px sizes belong to the legibility rule.
-    unless: /\btext-\[(?:[0-9]|1[01]|12|14|16|18|20|24|30|36|48|60|72|96|128)px\]/,
+    regex: /href\s*=\s*["']#?["']/,
+    unless: /onClick|role\s*=\s*["']button/,
+    extensions: UI,
+    maxFindings: 4,
+    vibeWeight: 0.45,
+    explanation:
+      'An href="#" link scrolls to the top and does nothing. Each one a ' +
+      'visitor clicks teaches them the site is a facade, and it teaches the ' +
+      'lesson on the exact element that invited the click.',
+    recommendation:
+      'Point every link at a real destination, or delete it. An honest ' +
+      'three-link footer beats ten decorative dead ends.',
+    verify: 'Search for href="#". None should remain.',
+  },
+  {
+    id: 'copy-placeholder-image',
+    title: 'Placeholder image service in production',
+    severity: 'medium',
+    layer: 'copy',
+    scope: 'line',
+    regex:
+      /via\.placeholder\.com|placehold\.co|placekitten\.com|dummyimage\.com|picsum\.photos|i\.pravatar\.cc|randomuser\.me|ui-avatars\.com|api\.dicebear\.com/i,
+    extensions: UI_AND_JS,
+    maxFindings: 3,
+    vibeWeight: 0.5,
+    explanation:
+      'Images loaded from placeholder services stand where a screenshot or ' +
+      'product photo should be. They are unfinished by definition, and they ' +
+      'break when the service is down.',
+    recommendation:
+      'Replace each with a real asset. An actual product screenshot beats ' +
+      'any stock art. If nothing real exists yet, cut the image.',
+    verify: 'Search for placeholder image domains. None should remain.',
+  },
+  {
+    id: 'copy-mechanism-label',
+    title: 'Button named after the mechanism, not the outcome',
+    severity: 'low',
+    layer: 'copy',
+    scope: 'line',
+    regex: />\s*(?:Submit|Click here|Go|OK)\s*<\/(?:button|a)>/i,
     extensions: UI,
     maxFindings: 3,
     vibeWeight: 0.2,
     explanation:
-      'Arbitrary sizes like text-[13px] or text-[17px] mean the type is being ' +
-      'eyeballed per element instead of coming from a scale. Professional ' +
-      'products (and Tailwind itself) use a small fixed set of sizes — that ' +
-      'consistency is a big part of why they look coherent.',
+      '"Submit" describes the implementation. Good interface copy names ' +
+      'what the person controls: the label is the entire information scent ' +
+      'the control gives off.',
     recommendation:
-      'Snap each one-off to the nearest built-in step (text-sm, text-base, ' +
-      'text-lg…). If you genuinely need a custom size, define it once in your ' +
-      'theme instead of inline.',
+      'Label the action with its result: "Create account", "Send message", ' +
+      '"Start the scan".',
+    verify: 'Every button label should answer "what happens when I press this?".',
   },
 
-  // ───────────────────────── color ─────────────────────────
+  // ─────────────── Layer G: accessibility floor ───────────────
   {
-    id: 'color-low-contrast-pair',
-    title: 'Low-contrast text on a light background',
+    id: 'a11y-outline-suppressed',
+    title: 'Focus outline removed without a replacement',
     severity: 'medium',
-    category: 'color',
+    layer: 'accessibility',
     scope: 'line',
+    regex: /\b(?:focus:)?outline-none\b|outline:\s*(?:none|0)\b/,
+    unless: /focus:ring|focus-visible:|focus:border|focus:outline-|focus:shadow|focus-within:/,
+    extensions: UI_AND_CSS,
+    maxFindings: 3,
+    vibeWeight: 0,
+    loadBearing: true,
+    explanation:
+      'outline-none with no visible replacement means keyboard users cannot ' +
+      'see where they are on the page. WCAG 2.4.7 requires a visible focus ' +
+      'indicator on every interactive element. This is common, severe, and ' +
+      'quick to fix.',
+    recommendation:
+      'Pair every outline-none with a visible alternative on the same ' +
+      'element, for example focus-visible:ring-2 with a ring offset.',
+    verify: 'Tab through the page. Focus should be visible on every stop.',
+  },
+  {
+    id: 'a11y-div-onclick',
+    title: 'Click handler on a non-interactive element',
+    severity: 'medium',
+    layer: 'accessibility',
+    scope: 'file',
+    regex: /<(?:div|span|li|p)\b(?![^>]*\brole\s*=)[^>]*\bonClick\s*=/g,
+    extensions: UI,
+    maxFindings: 4,
+    vibeWeight: 0,
+    loadBearing: true,
+    explanation:
+      'A clickable div works for a mouse and for nobody else. Keyboard users ' +
+      'cannot reach it and screen readers do not announce it as pressable. ' +
+      'WCAG 2.1.1 makes keyboard operability a level-A requirement.',
+    recommendation:
+      'Make it a real button element, styled however you like, or a link if ' +
+      'it navigates. Focus, key handling, and semantics then come free.',
+    verify: 'Tab to the element and press Enter. The action should fire.',
+  },
+  {
+    id: 'a11y-img-no-alt',
+    title: 'Image without alt text',
+    severity: 'medium',
+    layer: 'accessibility',
+    scope: 'file',
+    regex: /<(?:img|Image)\b(?![^>]*\balt\s*=)[^>]*>/g,
+    extensions: UI,
+    maxFindings: 4,
+    vibeWeight: 0,
+    explanation:
+      'An image with no alt attribute is invisible to screen readers and to ' +
+      'search engines. WCAG 1.1.1 requires a text alternative for every ' +
+      'informative image, at level A.',
+    recommendation:
+      'Describe what the image shows. For purely decorative images, use an ' +
+      'empty alt so screen readers skip them.',
+    verify: 'Search for img and Image tags without alt. None should remain.',
+  },
+  {
+    id: 'a11y-junk-alt',
+    title: 'Alt text that says nothing',
+    severity: 'low',
+    layer: 'accessibility',
+    scope: 'line',
+    regex: /\balt\s*=\s*["'](?:image|photo|picture|img|icon|logo)["']/i,
+    extensions: UI,
+    maxFindings: 3,
+    vibeWeight: 0.3,
+    explanation:
+      'alt="image" tells a screen-reader user there is an image here, which ' +
+      'they already know. It wastes the listener’s time while passing ' +
+      'automated checks.',
+    recommendation:
+      'Say what the image communicates, or use an empty alt if it is ' +
+      'decoration.',
+    verify: 'Read each alt text aloud without the image. It should carry the meaning.',
+  },
+  {
+    id: 'a11y-unlabeled-input',
+    title: 'Input with a placeholder as its only label',
+    severity: 'medium',
+    layer: 'accessibility',
+    scope: 'file',
     regex:
-      /(?=.*\btext-(?:gray|slate|zinc|neutral|stone)-(?:200|300)\b)(?=.*\b(?:bg-white|bg-(?:gray|slate|zinc|neutral|stone)-(?:50|100))\b)|(?=.*\btext-white\b)(?=.*\bbg-(?:yellow|lime|amber|cyan)-(?:200|300|400)\b)/,
+      /<input\b(?![^>]*(?:aria-label|aria-labelledby|id\s*=|type\s*=\s*["'](?:hidden|submit|checkbox|radio)))[^>]*\bplaceholder\s*=[^>]*>/g,
     extensions: UI,
     maxFindings: 3,
     vibeWeight: 0,
     explanation:
-      'This element pairs very light text with a light background. WCAG 1.4.3 ' +
-      'requires a 4.5:1 contrast ratio for normal text; pairs like ' +
-      'text-gray-300 on white sit far below it, making the text unreadable in ' +
-      'sunlight and for low-vision users.',
+      'Placeholder text disappears the moment typing starts, so the field ' +
+      'loses its name exactly when the person needs it. Screen readers may ' +
+      'never announce it at all. WCAG 3.3.2 requires a persistent label.',
     recommendation:
-      'Darken the text a few steps (gray-600 or darker on white). Check pairs ' +
-      'at webaim.org/resources/contrastchecker — 4.5:1 for body text, 3:1 for ' +
-      'large headlines.',
+      'Give the input a real label element tied to its id, or an aria-label ' +
+      'when a visible label truly cannot fit.',
+    verify: 'Every input should keep a visible or announced name while filled in.',
   },
-
-  // ───────────────────────── layout ─────────────────────────
   {
-    id: 'layout-zoom-disabled',
+    id: 'a11y-positive-tabindex',
+    title: 'Positive tabindex hijacking focus order',
+    severity: 'low',
+    layer: 'accessibility',
+    scope: 'line',
+    regex: /\btab[iI]ndex\s*=\s*[{"']?\s*[1-9]\d*/,
+    extensions: UI,
+    maxFindings: 2,
+    vibeWeight: 0,
+    explanation:
+      'A positive tabindex pulls keyboard focus out of reading order, making ' +
+      'navigation unpredictable. WCAG 2.4.3 requires a focus order that ' +
+      'preserves meaning.',
+    recommendation:
+      'Use tabindex="0" to make something focusable in natural order, or ' +
+      'restructure the markup so the order is right by default.',
+    verify: 'Tab through the page. Focus should move in reading order.',
+  },
+  {
+    id: 'a11y-zoom-disabled',
     title: 'Pinch-zoom disabled',
     severity: 'high',
-    category: 'layout',
+    layer: 'accessibility',
     scope: 'line',
     // Anchored to the meta content attribute / Next viewport export so a
     // sentence about the setting doesn't trip it.
@@ -480,202 +781,35 @@ export const DESIGN_RULES: DesignRule[] = [
     extensions: new Set([...UI, '.js', '.ts']),
     maxFindings: 1,
     vibeWeight: 0,
+    loadBearing: true,
     explanation:
-      'The viewport meta blocks zooming. WCAG 1.4.4 requires text to be ' +
-      'resizable to 200% — people with low vision literally cannot read a ' +
-      'page that traps them at 1x. Apple ignores this setting for exactly ' +
-      'that reason.',
+      'The viewport meta blocks zooming. WCAG 1.4.4 requires text to resize ' +
+      'to 200%, and people with low vision cannot read a page that traps ' +
+      'them at 1x.',
     recommendation:
-      'Remove user-scalable=no and maximum-scale=1 from the viewport tag (or ' +
-      'the Next.js viewport export). The default behavior is correct.',
+      'Remove user-scalable=no and maximum-scale=1 from the viewport ' +
+      'configuration. The default behavior is correct.',
+    verify: 'Pinch-zoom the deployed page on a phone. It should zoom.',
   },
   {
-    id: 'layout-fixed-width',
-    title: 'Fixed pixel width wider than a phone',
+    id: 'a11y-contrast-default-pair',
+    title: 'Text and background too close in luminance',
     severity: 'medium',
-    category: 'layout',
+    layer: 'accessibility',
     scope: 'line',
     regex:
-      /(?<!max-)(?<!min-)\bw-\[(?:4\d\d|[5-9]\d\d|\d{4,})px\]|(?<![-\w])width:\s*(?:4\d\d|[5-9]\d\d|\d{4,})px/,
-    unless: /\bmax-w-full\b|\bmd:|\blg:|@media/,
-    extensions: UI_AND_CSS,
+      /(?=.*\btext-(?:gray|slate|zinc|neutral|stone)-(?:200|300)\b)(?=.*\b(?:bg-white|bg-(?:gray|slate|zinc|neutral|stone)-(?:50|100))\b)|(?=.*\btext-white\b)(?=.*\bbg-(?:yellow|lime|amber|cyan)-(?:200|300|400)\b)/,
+    extensions: UI,
     maxFindings: 3,
     vibeWeight: 0,
     explanation:
-      'A hard width of 400px+ with no responsive override forces horizontal ' +
-      'scrolling on phones — WCAG 1.4.10 (Reflow) calls this out, and over ' +
-      'half of web traffic is mobile.',
+      'This element pairs very light text with a light background. WCAG ' +
+      '1.4.3 requires a 4.5:1 contrast ratio for body text, and this pair ' +
+      'sits far below it. The text disappears in sunlight and for low-vision ' +
+      'readers.',
     recommendation:
-      'Use max-width with a fluid fallback: "w-full max-w-[480px]" instead of ' +
-      '"w-[480px]", so the element shrinks with the screen.',
-  },
-
-  // ───────────────────────── accessibility ─────────────────────────
-  {
-    id: 'a11y-img-no-alt',
-    title: 'Image without alt text',
-    severity: 'medium',
-    category: 'accessibility',
-    scope: 'file',
-    regex: /<(?:img|Image)\b(?![^>]*\balt\s*=)[^>]*>/g,
-    extensions: UI,
-    maxFindings: 4,
-    vibeWeight: 0,
-    explanation:
-      'An image with no alt attribute is invisible to screen readers and to ' +
-      'search engines. WCAG 1.1.1 (level A — the legal baseline in many ' +
-      'countries) requires a text alternative for every informative image.',
-    recommendation:
-      'Describe what the image shows: alt="Dashboard showing weekly revenue". ' +
-      'For purely decorative images, use alt="" so screen readers skip them.',
-  },
-  {
-    id: 'a11y-junk-alt',
-    title: 'Meaningless alt text',
-    severity: 'low',
-    category: 'accessibility',
-    scope: 'line',
-    regex: /\balt\s*=\s*["'](?:image|photo|picture|img|icon|logo)["']/i,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.3,
-    explanation:
-      'alt="image" tells a screen-reader user "there is an image here" — ' +
-      'which they already know. Junk alt text is worse than none because it ' +
-      'wastes the listener’s time while passing automated checks.',
-    recommendation:
-      'Say what the image communicates ("Acme logo", "Graph of response ' +
-      'times dropping"), or alt="" if it is decoration.',
-  },
-  {
-    id: 'a11y-div-onclick',
-    title: 'Click handler on a non-interactive element',
-    severity: 'medium',
-    category: 'accessibility',
-    scope: 'file',
-    regex: /<(?:div|span|li|p)\b(?![^>]*\brole\s*=)[^>]*\bonClick\s*=/g,
-    extensions: UI,
-    maxFindings: 4,
-    vibeWeight: 0,
-    explanation:
-      'A clickable div works for a mouse and for nobody else: keyboard users ' +
-      'cannot reach it, screen readers do not announce it as pressable. WCAG ' +
-      '2.1.1 (Keyboard) is a level-A requirement.',
-    recommendation:
-      'Make it a real <button> (styled however you like) or an <a> if it ' +
-      'navigates. You get keyboard focus, Enter/Space handling, and correct ' +
-      'semantics for free.',
-  },
-  {
-    id: 'a11y-positive-tabindex',
-    title: 'Positive tabindex hijacks focus order',
-    severity: 'low',
-    category: 'accessibility',
-    scope: 'line',
-    regex: /\btab[iI]ndex\s*=\s*[{"']?\s*[1-9]\d*/,
-    extensions: UI,
-    maxFindings: 2,
-    vibeWeight: 0,
-    explanation:
-      'tabindex="1" (or any positive value) yanks keyboard focus out of ' +
-      'reading order, making navigation unpredictable — WCAG 2.4.3.',
-    recommendation:
-      'Use tabindex="0" to make something focusable in natural order, or ' +
-      'restructure the markup so the order is right by default.',
-  },
-  {
-    id: 'a11y-outline-suppressed',
-    title: 'Focus outline removed without a replacement',
-    severity: 'medium',
-    category: 'accessibility',
-    scope: 'line',
-    regex: /\b(?:focus:)?outline-none\b|outline:\s*(?:none|0)\b/,
-    unless: /focus:ring|focus-visible:|focus:border|focus:outline-|focus:shadow|focus-within:/,
-    extensions: UI_AND_CSS,
-    maxFindings: 3,
-    vibeWeight: 0,
-    explanation:
-      'outline-none with no visible replacement means keyboard users cannot see ' +
-      'where they are on the page. WCAG 2.4.7 (Focus Visible) requires a ' +
-      'visible indicator on every interactive element.',
-    recommendation:
-      'Pair every outline-none with a visible alternative on the same ' +
-      'element, e.g. "focus-visible:ring-2 focus-visible:ring-offset-2".',
-  },
-
-  // ───────────────────────── content ─────────────────────────
-  {
-    id: 'content-lorem',
-    title: 'Lorem ipsum shipped to production',
-    severity: 'high',
-    category: 'content',
-    scope: 'line',
-    regex: /lorem ipsum|dolor sit amet/i,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.75,
-    explanation:
-      'Placeholder latin in user-visible text is the universal sign of an ' +
-      'unfinished page — it tells every visitor the site shipped without ' +
-      'anyone reading it.',
-    recommendation:
-      'Write the real sentence. If a section has nothing real to say yet, ' +
-      'remove the section — a shorter honest page beats a padded fake one.',
-  },
-  {
-    id: 'content-placeholder-image',
-    title: 'Placeholder image service in production',
-    severity: 'medium',
-    category: 'content',
-    scope: 'line',
-    regex:
-      /via\.placeholder\.com|placehold\.co|placekitten\.com|dummyimage\.com|picsum\.photos|i\.pravatar\.cc|randomuser\.me|ui-avatars\.com|api\.dicebear\.com/i,
-    extensions: UI_AND_JS,
-    maxFindings: 3,
-    vibeWeight: 0.5,
-    explanation:
-      'Images loaded from placeholder services are grey boxes standing where ' +
-      'a screenshot or product photo should be — unfinished by definition, ' +
-      'and they break if the service is down.',
-    recommendation:
-      'Replace each with a real asset: an actual product screenshot beats any ' +
-      'stock art. If nothing real exists yet, cut the image.',
-  },
-  {
-    id: 'content-dead-link',
-    title: 'Link that goes nowhere (href="#")',
-    severity: 'medium',
-    category: 'content',
-    scope: 'line',
-    regex: /href\s*=\s*["']#?["']/,
-    unless: /onClick|role\s*=\s*["']button/,
-    extensions: UI,
-    maxFindings: 4,
-    vibeWeight: 0.45,
-    explanation:
-      'href="#" is a link wearing a costume: clicking it scrolls to the top ' +
-      'and does nothing. AI generators emit them for every nav item and ' +
-      'social icon they cannot resolve. Each one a visitor clicks teaches ' +
-      'them the site is a facade.',
-    recommendation:
-      'Point every link at a real destination, or delete it. An honest ' +
-      'three-link footer beats ten decorative dead ends.',
-  },
-  {
-    id: 'content-generic-cta',
-    title: 'Generic button label',
-    severity: 'low',
-    category: 'content',
-    scope: 'line',
-    regex: />\s*(?:Submit|Click here|Go|OK)\s*<\/(?:button|a)>/i,
-    extensions: UI,
-    maxFindings: 3,
-    vibeWeight: 0.2,
-    explanation:
-      '"Submit" describes the mechanism, not the outcome. Buttons convert ' +
-      'better and read as more professional when they say what happens next.',
-    recommendation:
-      'Label the action with its result: "Create account", "Send message", ' +
-      '"Start the scan".',
+      'Darken the text several steps. Check the exact pair with a contrast ' +
+      'checker: 4.5:1 for body text, 3:1 for large headlines.',
+    verify: 'Run the flagged pair through a contrast checker. It should reach 4.5:1.',
   },
 ];
