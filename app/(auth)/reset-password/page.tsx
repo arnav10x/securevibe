@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { Alert, Button, Card, Input, Label } from '@/components/ui';
 
 // The user lands here from the email reset link (which established a
@@ -18,7 +19,7 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) {
-      setError('Please use a password of at least 8 characters.');
+      setError('Use a password of at least 8 characters.');
       return;
     }
     if (password !== confirm) {
@@ -27,14 +28,12 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth
+      .updateUser({ password })
+      .catch((e: unknown) => ({ error: e as { message: string } }));
     setLoading(false);
     if (error) {
-      setError(
-        error.message.includes('session')
-          ? 'Your reset link has expired. Please request a new one from the sign-in page.'
-          : error.message,
-      );
+      setError(authErrorMessage(error.message));
       return;
     }
     router.push('/dashboard');
