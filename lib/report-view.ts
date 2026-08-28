@@ -12,10 +12,26 @@ import { CRAFT_LAYERS, DESIGN_RULES, type CraftLayerId } from '@/lib/scanner/rul
 
 export type PanelId = CraftLayerId | 'exposure';
 
+/**
+ * One line of information scent per ring (SECUREVIBE.md 2.14): a label like
+ * "State coverage" tells a founder nothing until they learn the system, so
+ * each ring carries what it actually measures.
+ */
+const PANEL_HINTS: Record<PanelId, string> = {
+  tokens: 'Does a design system exist at all',
+  states: 'Empty, loading, error, offline',
+  typography: 'A scale, or sizes picked per element',
+  motion: 'Does the interface answer you',
+  layout: 'Built to a content model, or one example',
+  copy: 'Voice, specificity, honest claims',
+  accessibility: 'Keyboard, labels, contrast: the floor',
+  exposure: 'Keys, injections, open databases',
+};
+
 /** Ring order: the seven craft layers by weight, then exposure. */
-export const PANEL_ORDER: { id: PanelId; label: string }[] = [
-  ...CRAFT_LAYERS.map((l) => ({ id: l.id as PanelId, label: l.label })),
-  { id: 'exposure', label: 'Exposure' },
+export const PANEL_ORDER: { id: PanelId; label: string; hint: string }[] = [
+  ...CRAFT_LAYERS.map((l) => ({ id: l.id as PanelId, label: l.label, hint: PANEL_HINTS[l.id] })),
+  { id: 'exposure', label: 'Exposure', hint: PANEL_HINTS.exposure },
 ];
 
 const PREFIX_TO_LAYER: Record<string, CraftLayerId> = {

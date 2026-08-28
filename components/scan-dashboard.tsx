@@ -1,22 +1,28 @@
 'use client';
 
-// The scan dashboard: the whole report on one screen, instrument-panel
-// style, instead of a tall column the reader scrolls through.
+// The scan dashboard, laid out by the product's own attention rules
+// (SECUREVIBE.md Part 2):
 //
-//   1. Distance to production — a number-line meter with a flag at the
-//      end. Two markers (craft above, exposure below) on one track; you
-//      ship at the pace of the lower one, so that marker carries the
-//      number. Never an average: an average would let good typography
-//      hide a leaked key.
-//   2. Eight rings — the seven craft layers plus exposure, equal weight
-//      visually (Lighthouse-style score gauges). Clicking a ring opens
-//      that layer's panel.
-//   3. The panel — findings grouped by SIGNAL (the rule that fired), so
-//      "Emoji standing in for icons ×4" is one row that opens into its
-//      occurrences, not four rows in a wall of everything.
+//   ONE focal point per view (2.1, 2.3). The verdict sentence is it: the
+//   largest type on the page, isolated by whitespace, read first. Every
+//   other element is deliberately quieter, because emphasis is zero-sum —
+//   "discriminability requires suppression, not addition."
 //
-// Pure render over data the server page passes in; selection is the only
-// state.
+//   Red has ONE job (2.10): defect severity. Weak scores and severity
+//   marks are red; nothing decorative is. When something on this page is
+//   red, it needs fixing.
+//
+//   The healthy recede so the broken advance (Von Restorff, 3.4): rings
+//   with nothing to show sit at low opacity; rings with findings hold
+//   full contrast; the weakest carries the only color.
+//
+//   Proximity does the grouping (2.2): tight gaps inside a card, wide
+//   gaps between cards, so the verdict band and the work area read as
+//   two thoughts, not five widgets.
+//
+// Structure: verdict + readiness track, then eight equal rings (seven
+// craft layers + exposure) opening a master-detail panel where findings
+// group by signal, then occurrence.
 
 import { useMemo, useState } from 'react';
 import type { ReportCard } from '@/lib/scanner/types';
@@ -33,9 +39,10 @@ import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
 import { fixPrompt, SEVERITY_COLOR, type FindingView } from '@/components/findings';
 
-/** Ring + bar color: hazard red only when a score is genuinely poor. */
+/** Red means "needs fixing" and nothing else. */
+const WEAK = 63;
 function scoreColor(score: number): string {
-  return score < 63 ? 'var(--color-signal)' : 'var(--color-ink)';
+  return score < WEAK ? 'var(--color-signal)' : 'var(--color-ink)';
 }
 
 const BANDS = [
@@ -54,110 +61,111 @@ function FlagIcon({ className }: { className?: string }) {
   );
 }
 
-// ─────────────────────────── the number line ───────────────────────────
+// ─────────────── card 1: the verdict, then the evidence ────────────────
 
-function ReadinessMeter({ report }: { report: ReportCard }) {
+function VerdictCard({ report }: { report: ReportCard }) {
   const craft = report.craftScore;
   const exposure = report.securityScore;
   const ready = readinessScore(craft, exposure);
   const craftIsLower = craft <= exposure;
-
-  const marker = (score: number, label: string, lower: boolean, above: boolean) => (
-    <div
-      className="absolute -translate-x-1/2"
-      style={{ left: `${Math.min(Math.max(score, 1.5), 98.5)}%`, [above ? 'bottom' : 'top']: '100%' }}
-    >
-      <div className={`flex flex-col items-center ${above ? '' : 'flex-col-reverse'}`}>
-        <span
-          className={`mono-tight whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] ${
-            lower
-              ? 'bg-ink text-paper'
-              : 'border border-[var(--line-strong)] bg-paper text-ink-mute'
-          }`}
-        >
-          {label} {score}
-        </span>
-        <span
-          className={`h-2 w-px ${lower ? 'bg-ink' : 'bg-[var(--line-strong)]'}`}
-          aria-hidden
-        />
-      </div>
-    </div>
-  );
+  const clamp = (v: number) => Math.min(Math.max(v, 1.5), 98.5);
 
   return (
-    <div className="px-6 pb-7 pt-5 sm:px-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="label">Distance to production</p>
-          <p className="mt-2 flex items-baseline gap-1.5">
-            <span className="display text-5xl leading-none tabular-nums" style={{ color: scoreColor(ready) }}>
-              {ready}
-            </span>
-            <span className="font-mono text-[11px] text-ink-mute">/100</span>
-          </p>
-        </div>
-        <p className="mono-tight max-w-44 text-right font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-ink-mute sm:max-w-none">
-          You ship at the pace of the lower marker
-        </p>
-      </div>
+    <div className="px-6 pb-6 pt-5 sm:px-8">
+      <p className="label">Verdict</p>
 
-      {/* The track: markers need headroom above and below */}
-      <div className="relative mb-6 mt-10 sm:mx-2">
-        <div className="relative h-[3px] rounded-full bg-well">
-          {/* progress to the marker */}
-          <div
-            className="absolute inset-y-0 left-0 rounded-full"
-            style={{ width: `${ready}%`, background: scoreColor(ready) }}
-          />
-          {/* band boundaries */}
-          {[30, 55, 80].map((t) => (
-            <span
-              key={t}
-              className="absolute top-1/2 h-2.5 w-px -translate-y-1/2 bg-[var(--line-strong)]"
-              style={{ left: `${t}%` }}
-              aria-hidden
+      {/* The one focal element on the page. */}
+      {report.verdict && (
+        <p className="prose-serif mt-3 max-w-2xl text-[21px] leading-snug text-ink sm:text-[24px]">
+          {report.verdict}
+        </p>
+      )}
+
+      {/* The evidence line: quiet, single-voice. */}
+      <div className="mt-9 flex items-center gap-5 sm:gap-7">
+        <p className="shrink-0">
+          <span className="display text-3xl leading-none tabular-nums text-ink">{ready}</span>
+          <span className="ml-1 font-mono text-[10px] text-ink-mute">/100</span>
+        </p>
+
+        <div className="relative min-w-0 flex-1">
+          <div className="relative h-[3px] rounded-full bg-well">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-ink"
+              style={{ width: `${ready}%` }}
             />
-          ))}
-          {marker(craft, 'Craft', craftIsLower, true)}
-          {marker(exposure, 'Exposure', !craftIsLower, false)}
-          {/* the flag at the end */}
-          <div className="absolute -right-1 bottom-full mb-0.5 flex flex-col items-center text-ink">
-            <FlagIcon className="h-4 w-4" />
+            {[30, 55, 80].map((t) => (
+              <span
+                key={t}
+                className="absolute top-1/2 h-2 w-px -translate-y-1/2 bg-[var(--line-strong)]"
+                style={{ left: `${t}%` }}
+                aria-hidden
+              />
+            ))}
+
+            {/* You are here: the lower score, the only chip. */}
+            <div
+              className="absolute bottom-full mb-1 -translate-x-1/2"
+              style={{ left: `${clamp(ready)}%` }}
+            >
+              <div className="flex flex-col items-center">
+                <span className="mono-tight whitespace-nowrap rounded bg-ink px-1.5 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-paper">
+                  {craftIsLower ? 'Craft' : 'Exposure'} {ready}
+                </span>
+                <span className="h-1.5 w-px bg-ink" aria-hidden />
+              </div>
+            </div>
+
+            {/* The other axis: a tick, not a competitor. */}
+            <div
+              className="absolute top-full mt-1 -translate-x-1/2"
+              style={{ left: `${clamp(craftIsLower ? exposure : craft)}%` }}
+            >
+              <div className="flex flex-col items-center">
+                <span className="h-1.5 w-px bg-[var(--line-strong)]" aria-hidden />
+                <span className="mono-tight whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.1em] text-ink-mute">
+                  {craftIsLower ? 'Exposure' : 'Craft'} {craftIsLower ? exposure : craft}
+                </span>
+              </div>
+            </div>
+
+            <FlagIcon className="absolute -right-1 bottom-full mb-1 h-3.5 w-3.5 text-ink-mute" />
+          </div>
+
+          {/* Band scent, desktop only. */}
+          <div className="relative mt-7 hidden h-3 sm:block" aria-hidden>
+            {BANDS.map((b, i) => {
+              const next = BANDS[i + 1]?.from ?? 100;
+              return (
+                <span
+                  key={b.label}
+                  className="mono-tight absolute -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.14em] text-ink-mute"
+                  style={{ left: `${(b.from + next) / 2}%` }}
+                >
+                  {b.label}
+                </span>
+              );
+            })}
           </div>
         </div>
-        {/* band labels */}
-        <div className="relative mt-9 hidden h-4 sm:block" aria-hidden>
-          {BANDS.map((b, i) => {
-            const next = BANDS[i + 1]?.from ?? 100;
-            return (
-              <span
-                key={b.label}
-                className="mono-tight absolute -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.14em] text-ink-mute"
-                style={{ left: `${(b.from + next) / 2}%` }}
-              >
-                {b.label}
-              </span>
-            );
-          })}
-        </div>
       </div>
 
-      {report.verdict && (
-        <p className="prose-serif text-[16px] leading-snug text-ink">{report.verdict}</p>
-      )}
+      <p className="mt-4 text-[12.5px] leading-relaxed text-ink-mute sm:mt-2">
+        Distance to production. {craftIsLower ? 'Craft' : 'Exposure'} is what holds it back —
+        the other axis sits at {craftIsLower ? exposure : craft}. Never an average.
+      </p>
     </div>
   );
 }
 
 // ─────────────────────────────── rings ─────────────────────────────────
 
-function Ring({ score, active }: { score: number | null; active: boolean }) {
+function Ring({ score, quiet }: { score: number | null; quiet: boolean }) {
   const R = 30;
   const C = 2 * Math.PI * R;
   const value = score ?? 0;
   return (
-    <span className="relative inline-block h-[76px] w-[76px]">
+    <span className="relative inline-block h-[72px] w-[72px]">
       <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
         <circle cx="36" cy="36" r={R} fill="none" stroke="var(--line-strong)" strokeWidth="5" />
         {score !== null && (
@@ -171,13 +179,16 @@ function Ring({ score, active }: { score: number | null; active: boolean }) {
             strokeLinecap="round"
             strokeDasharray={C}
             strokeDashoffset={C * (1 - value / 100)}
-            opacity={active ? 1 : 0.75}
           />
         )}
       </svg>
-      <span className="display absolute inset-0 grid place-items-center text-xl tabular-nums text-ink">
+      <span
+        className="display absolute inset-0 grid place-items-center text-[19px] tabular-nums"
+        style={{ color: score !== null && value < WEAK ? 'var(--color-signal)' : 'var(--color-ink)' }}
+      >
         {score === null ? '—' : value}
       </span>
+      {quiet && <span className="sr-only">clear</span>}
     </span>
   );
 }
@@ -319,47 +330,72 @@ export function ScanDashboard({
   const capReason = active === 'exposure' ? report.securityCapReason : report.craftCapReason;
 
   return (
-    <div className="space-y-6">
-      {/* 1 ── distance to production */}
+    <div className="space-y-5">
+      {/* 1 ── the verdict, then the readiness evidence */}
       <section className="plate overflow-visible">
-        <ReadinessMeter report={report} />
+        <VerdictCard report={report} />
       </section>
 
       {/* 2 ── the rings, and the panel they open */}
       <section className="plate overflow-hidden">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6">
+          <p className="label">Where the judgment shows</p>
+          <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+            Select a layer
+          </p>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-4" role="tablist" aria-label="Report areas">
           {PANEL_ORDER.map((p, i) => {
             const count = byPanel.get(p.id)?.length ?? 0;
             const isActive = active === p.id;
             const score = scoreFor(p.id);
+            const clear = count === 0;
             return (
               <button
                 key={p.id}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
+                title={p.hint}
                 onClick={() => setActive(p.id)}
-                className={`flex cursor-pointer flex-col items-center gap-2 border-b border-[var(--line)] px-3 pb-4 pt-5 transition-colors ${
+                className={`flex cursor-pointer flex-col items-center gap-1.5 border-b border-[var(--line)] px-3 pb-3.5 pt-4 transition-all focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
                   i % 2 === 0 ? 'border-r' : i % 4 === 1 ? 'sm:border-r' : ''
-                } ${isActive ? 'bg-well' : 'hover:bg-sheet'}`}
-                style={isActive ? { boxShadow: 'inset 0 -2.5px 0 var(--color-ink)' } : undefined}
+                } ${isActive ? 'bg-well' : 'hover:bg-sheet'} ${
+                  clear && !isActive ? 'opacity-45 hover:opacity-90' : ''
+                }`}
+                style={isActive ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
               >
-                <Ring score={score} active={isActive} />
+                <Ring score={score} quiet={clear} />
                 <span className="text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
                   {p.label}
                 </span>
-                <span className="mono-tight font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
-                  {count === 0 ? 'clear' : `${count} finding${count === 1 ? '' : 's'}`}
-                </span>
+                {clear ? (
+                  <span className="mono-tight flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+                    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <path d="M2 6.5 5 9l5-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    clear
+                  </span>
+                ) : (
+                  <span className="text-[11.5px] font-semibold tabular-nums text-ink">
+                    {count} finding{count === 1 ? '' : 's'}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* 3 ── the panel: signals in the selected area */}
+        {/* 3 ── the panel: signals in the selected layer */}
         <div className="px-4 py-5 sm:px-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="label">{activeMeta.label}</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <div>
+              <h2 className="text-[16px] font-semibold tracking-tight text-ink">
+                {activeMeta.label}
+              </h2>
+              <p className="mt-0.5 text-[12.5px] text-ink-mute">{activeMeta.hint}.</p>
+            </div>
             <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
               {groups.length === 0
                 ? 'nothing flagged'
