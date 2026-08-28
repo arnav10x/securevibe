@@ -88,6 +88,17 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   };
   const inFlight = scan.status === 'queued' || scan.status === 'running';
 
+  // Scans graded before the seven-layer engine store a report the dashboard
+  // cannot faithfully render (different categories, no craft score). They
+  // keep the plain findings list plus a rescan nudge instead of a meter
+  // full of dashes.
+  const report = stats.report;
+  const modernReport =
+    !!report &&
+    typeof report.craftScore === 'number' &&
+    typeof report.verdict === 'string' &&
+    Array.isArray(report.categories);
+
   return (
     <div>
       {inFlight && <AutoRefresh />}
@@ -178,12 +189,20 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </Alert>
         )}
 
-        {scan.status === 'completed' && stats.report && (
-          <ScanDashboard report={stats.report} findings={browserFindings} />
+        {scan.status === 'completed' && modernReport && (
+          <ScanDashboard report={report} findings={browserFindings} />
+        )}
+
+        {scan.status === 'completed' && !modernReport && all.length > 0 && (
+          <Alert tone="info">
+            This scan predates the current report. The findings below are still
+            valid — rescan the repo to get the full dashboard with craft layers
+            and the distance-to-production meter.
+          </Alert>
         )}
 
         {/* Legacy scans with no report card still get an honest clean note. */}
-        {scan.status === 'completed' && !stats.report && all.length === 0 && (
+        {scan.status === 'completed' && !modernReport && all.length === 0 && (
           <Card className="py-14 text-center">
             <StampIn>
               <span className="tag tag--safe text-base">Clear · no findings</span>
@@ -211,8 +230,8 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </details>
         )}
 
-        {/* Legacy scans that predate the report card: the old severity queue */}
-        {scan.status === 'completed' && !stats.report && all.length > 0 && (
+        {/* Legacy scans that predate the dashboard: the old severity queue */}
+        {scan.status === 'completed' && !modernReport && all.length > 0 && (
           <FindingsBrowser findings={browserFindings} />
         )}
 
