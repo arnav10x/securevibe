@@ -1,7 +1,7 @@
-// The scan report page: an inspection report. The letterhead carries the
-// "source destroyed" stamp (the product's trust moment), the report card
-// carries the grade, and the findings browser turns the list into a
-// severity-tabbed triage queue.
+// The scan report page: an instrument panel, not a scroll. The letterhead
+// carries the "source destroyed" stamp (the product's trust moment); the
+// dashboard puts the distance-to-production meter, the eight rings, and
+// the per-layer signal panel on one screen.
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -11,7 +11,7 @@ import { Alert, Card } from '@/components/ui';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { toFindingView } from '@/components/findings';
 import { FindingsBrowser } from '@/components/findings-browser';
-import { ReportCardPlate } from '@/components/report-card';
+import { ScanDashboard } from '@/components/scan-dashboard';
 import { StampIn } from '@/components/fx';
 import {
   IconArchive,
@@ -43,6 +43,7 @@ interface Finding {
   evidence_masked: string | null;
   recommendation: string;
   confidence?: string;
+  rule_id?: string | null;
 }
 
 export default async function ScanPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,7 +59,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
 
   const { data: findings } = await supabase
     .from('findings')
-    .select('id, check_type, severity, confidence, title, explanation, file_path, line_start, evidence_masked, recommendation')
+    .select('id, check_type, severity, confidence, rule_id, title, explanation, file_path, line_start, evidence_masked, recommendation')
     .eq('scan_id', id);
 
   // One list, worst first; CRAFT findings lead within a severity band.
@@ -178,7 +179,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         )}
 
         {scan.status === 'completed' && stats.report && (
-          <ReportCardPlate report={stats.report} />
+          <ScanDashboard report={stats.report} findings={browserFindings} />
         )}
 
         {/* Legacy scans with no report card still get an honest clean note. */}
@@ -195,21 +196,30 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </Card>
         )}
 
+        {scan.status === 'completed' && (stats.notes ?? []).length > 0 && (
+          <details className="px-1">
+            <summary className="mono-tight cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute hover:text-ink">
+              Scan notes ({(stats.notes ?? []).length})
+            </summary>
+            <div className="mt-3 space-y-2">
+              {(stats.notes ?? []).map((note) => (
+                <Alert key={note} tone="info">
+                  {note}
+                </Alert>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {/* Legacy scans that predate the report card: the old severity queue */}
+        {scan.status === 'completed' && !stats.report && all.length > 0 && (
+          <FindingsBrowser findings={browserFindings} />
+        )}
+
         {scan.status === 'completed' && all.length > 0 && (
-          <>
-            {(stats.notes ?? []).map((note) => (
-              <Alert key={note} tone="info">
-                {note}
-              </Alert>
-            ))}
-
-            {/* Severity tabs + accordion list — the whole report, one queue */}
-            <FindingsBrowser findings={browserFindings} />
-
-            <p className="rule-hair pt-5 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-ink-mute">
-              End of report ∎
-            </p>
-          </>
+          <p className="rule-hair pt-5 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-ink-mute">
+            End of report ∎
+          </p>
         )}
       </div>
     </div>

@@ -244,6 +244,7 @@ export async function POST(request: Request) {
         check_type: f.checkType,
         severity: f.severity,
         confidence: f.confidence ?? 'heuristic',
+        rule_id: f.ruleId ?? null,
         title: f.title,
         explanation: f.explanation,
         file_path: f.filePath ?? null,
