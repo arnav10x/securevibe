@@ -74,7 +74,7 @@ export default function SignupPage() {
     <Card>
       <h1 className="mb-1 display text-2xl text-ink">Create your account</h1>
       <p className="mb-6 text-sm text-ink-soft">
-        Free plan: 3 security scans a month. No credit card needed.
+        Free plan: 3 scans a month. No credit card needed.
       </p>
 
       {error && (

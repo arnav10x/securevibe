@@ -4,7 +4,7 @@
 
 import { ImageResponse } from 'next/og';
 
-export const alt = 'SecureVibe — security checkup for AI-built apps';
+export const alt = 'SecureVibe — does your AI-built app look it?';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -106,7 +106,7 @@ export default function OpengraphImage() {
               background: ink,
             }}
           />
-          Security scans · for AI-built apps
+          Design audit · for AI-built products
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', marginTop: 24 }}>
@@ -129,7 +129,7 @@ export default function OpengraphImage() {
               color: inkMute,
             }}
           >
-            Did it build it safely?
+            Can everyone tell?
           </div>
         </div>
 

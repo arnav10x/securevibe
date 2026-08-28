@@ -41,7 +41,7 @@ function LoginForm() {
   return (
     <Card>
       <h1 className="mb-1 display text-2xl text-ink">Welcome back</h1>
-      <p className="mb-6 text-sm text-ink-soft">Sign in to run your security scans.</p>
+      <p className="mb-6 text-sm text-ink-soft">Sign in to run your scans.</p>
 
       {notice && (
         <div className="mb-4">

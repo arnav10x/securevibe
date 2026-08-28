@@ -68,8 +68,8 @@ export default async function MarketingLayout({ children }: { children: ReactNod
             <div className="max-w-xs">
               <Logo />
               <p className="prose-serif mt-4 text-[15px] text-ink-soft">
-                A pre-launch security checkup for apps built with AI coding tools. Scan, read
-                the plain-English report, launch with confidence.
+                A craft audit for products built with AI coding tools. See what marks yours as
+                machine-built, with the evidence and the fix. Security included.
               </p>
               <p className="tag tag--safe mt-6 text-[10px]">Code deleted after every scan</p>
             </div>

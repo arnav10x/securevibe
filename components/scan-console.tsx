@@ -22,12 +22,14 @@ interface Teaser {
   locked: { severity: string }[];
   stats?: {
     report?: {
+      verdict?: string;
+      craftGrade: string;
+      craftScore: number;
+      vibeScore: number;
       securityGrade: string;
       securityScore: number;
       securityCapReason: string | null;
       insufficientSignal: boolean;
-      craftScore: number;
-      vibeScore: number;
     };
   };
 }
@@ -265,21 +267,29 @@ export function ScanConsole() {
               </button>
             </div>
 
+            {teaser.stats?.report?.verdict && (
+              <p className="prose-serif mt-5 text-[15px] leading-snug text-bone">
+                {teaser.stats.report.verdict}
+              </p>
+            )}
+
             {teaser.stats?.report && (
-              <div className="mt-5 rounded-xl bg-ultra-deep px-4 py-3">
+              <div className="mt-4 rounded-xl bg-ultra-deep px-4 py-3">
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                   <span className="flex items-baseline gap-2.5">
                     <span className="display text-4xl leading-none text-bone">
-                      {teaser.stats.report.securityGrade}
+                      {teaser.stats.report.insufficientSignal
+                        ? '—'
+                        : teaser.stats.report.craftGrade}
                     </span>
                     <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-bone/60">
-                      Security grade
+                      Craft grade
                     </span>
                   </span>
                   <span className="font-mono text-[11px] tabular-nums text-bone/80">
                     {teaser.stats.report.insufficientSignal
                       ? 'not enough code to grade'
-                      : `Security ${teaser.stats.report.securityScore} · Craft ${teaser.stats.report.craftScore} · Vibe ${teaser.stats.report.vibeScore}/100`}
+                      : `Craft ${teaser.stats.report.craftScore} · Reads generated ${teaser.stats.report.vibeScore}/100 · Exposure ${teaser.stats.report.securityGrade}`}
                   </span>
                 </div>
                 {teaser.stats.report.securityCapReason && (
@@ -292,8 +302,8 @@ export function ScanConsole() {
 
             {clean ? (
               <p className="mt-5 flex items-center gap-2.5 text-sm text-bone">
-                <IconSparkle className="h-4 w-4 text-safe" /> No issues found by our five
-                checks — a good sign, not a guarantee.
+                <IconSparkle className="h-4 w-4 text-safe" /> Nothing flagged across the craft
+                layers or the exposure checks — a good sign, not a guarantee.
               </p>
             ) : (
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2.5">

@@ -278,7 +278,7 @@ export default async function DashboardPage() {
           <h2 className="display mt-6 text-2xl">No scans on record</h2>
           <p className="prose-serif mx-auto mt-3 max-w-md text-[15px] text-ink-soft">
             Point SecureVibe at a public GitHub repo or upload a zip of your project, and get a
-            plain-English security report in about a minute.
+            plain-English craft and exposure report in about a minute.
           </p>
           <div className="mt-6 flex justify-center">
             <ButtonLink href="/scans/new">Run your first scan</ButtonLink>

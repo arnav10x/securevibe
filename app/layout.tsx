@@ -20,27 +20,27 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: 'SecureVibe — security checkup for AI-built apps',
+    default: 'SecureVibe — does your AI-built app look it?',
     template: '%s — SecureVibe',
   },
   description:
-    'Built your app with AI? Scan it for exposed secrets, open databases, fake dependencies ' +
-    'and insecure code before you launch. Plain-English report in about a minute. ' +
-    'Your code is deleted the moment the scan finishes.',
+    'Built your app with AI? Find out what marks it as machine-built — with evidence, file ' +
+    'by file. Seven craft layers graded, security included, plus a fix prompt for every ' +
+    'finding. About a minute, and your code is deleted the moment the scan finishes.',
   openGraph: {
-    title: 'SecureVibe — security checkup for AI-built apps',
+    title: 'SecureVibe — does your AI-built app look it?',
     description:
-      'Find the security holes AI coding tools leave behind — before someone else does. ' +
-      'Plain-English report, code deleted right after scanning.',
+      'See exactly what marks your product as machine-built, with a citation for every ' +
+      'finding and a fix prompt you can paste straight into your coding agent.',
     url: appUrl,
     siteName: 'SecureVibe',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SecureVibe — security checkup for AI-built apps',
+    title: 'SecureVibe — does your AI-built app look it?',
     description:
-      'Find the security holes AI coding tools leave behind — before someone else does.',
+      'See what marks your product as machine-built, with evidence and a fix for each finding.',
   },
 };
 

@@ -36,7 +36,7 @@ export default async function ReportPreviewPage() {
             evidenceMasked: f.evidenceMasked ?? null,
             explanation: f.explanation,
             recommendation: f.recommendation,
-            typeLabel: 'Design',
+            typeLabel: 'Craft',
           }))}
         />
       </div>
