@@ -24,14 +24,9 @@
 import path from 'node:path';
 import type { Confidence, Finding, Severity } from '../types';
 import { isPatternDefinitionLine, matchIsInsideProseString } from '../util';
-import {
-  CRAFT_LAYERS,
-  CSS,
-  DESIGN_RULES,
-  UI,
-  type CraftLayerId,
-  type DesignRule,
-} from '../rules/design-rules';
+import { CSS, DESIGN_RULES, UI, type CraftLayerId, type DesignRule } from '../rules/design-rules';
+import type { Ceiling, DimensionId, PositiveSignal } from '../craft-score';
+import { DIMENSION_MAX } from '../craft-score';
 
 /** One rule's aggregate result, handed to grade.ts for scoring. */
 export interface LayerHit {
@@ -49,10 +44,26 @@ export interface DesignAudit {
   notes: string[];
   /** Workflow markers recorded as context. Never scored. */
   provenance: string[];
-  /** 0–100, how loudly the project announces "unreviewed model output". */
+  /** Distinct tell IDs that fired (drives the density multiplier). */
+  tells: string[];
+  /** Positive evidence of decisions: the only way points are earned. */
+  positives: PositiveSignal[];
+  /** Score ceilings triggered by detections. The lowest one binds. */
+  ceilings: Ceiling[];
+  /** Per-dimension point caps imposed by tell effects. */
+  dimensionCaps: Partial<Record<DimensionId, number>>;
+  /**
+   * True when the repo reads as pre-launch (no pricing, no testimonials):
+   * operational-evidence scoring normalizes over the subset that applies,
+   * because honesty about having no customers must not be punished.
+   */
+  prelaunch: boolean;
+  /** Template / adapted / distinct, from the landing structure. */
+  categoryFit: 'template' | 'adapted' | 'distinct' | null;
+  /** Whether any UI was found at all (no UI = craft not applicable). */
+  uiFileCount: number;
+  /** Legacy 0–100 meter derived from tell density (teaser compatibility). */
   vibeScore: number;
-  /** Every fired rule with its layer, for craft scoring in grade.ts. */
-  hits: LayerHit[];
   /** Copy excerpts for the optional model-assisted judgment pass. */
   copySamples: string[];
 }
@@ -85,6 +96,20 @@ const PROVENANCE_FILES = new Set([
 
 const BUILDER_FINGERPRINT =
   /lovable-tagger|cdn\.gpteng\.co|data-lov-id|Welcome to your Lovable project|content=["']v0\.dev["']|generator:\s*["']v0\.dev|Made with Bolt|href=["']https:\/\/bolt\.new/i;
+
+interface Claim {
+  kind: string;
+  value: number;
+  raw: string;
+  file: string;
+}
+
+/** Synonym buckets so "clients" and "businesses" compare as one kind. */
+function bucketOf(noun: string): string {
+  const n = noun.toLowerCase();
+  if (n === 'users' || n === 'developers') return 'users';
+  return 'customers';
+}
 
 interface RuleHit {
   rule: DesignRule;
@@ -172,6 +197,28 @@ export class DesignAnalyzer {
   /** Every bracketed font size seen, with how often. Drives the scale check. */
   private bracketSizeCounts = new Map<string, number>();
 
+  // ── operational evidence (D8) and positive-signal collectors ──
+  private telLinkSeen = false;
+  private mailtoSeen = false;
+  private jsonLdTypes = new Set<string>();
+  private pdfAssets = 0;
+  private photoAssets = 0;
+  private datedContentFiles = 0;
+  private focusVisibleCount = 0;
+  private darkTokenOverrides = 0;
+  private a11yToolingSeen = false;
+  private ciSeen = false;
+  private spaOnlyStack = false;
+  private ssrStackSeen = false;
+  private scaleExtensionSeen = false;
+  private durationValues = new Set<string>();
+  private staggerSeen = false;
+  private skeletonSeen = false;
+  private emptyCtaSeen = false;
+  private claims: Claim[] = [];
+  private copyrightYears: number[] = [];
+  private descLengthFiles: { relPath: string; lengths: number[] }[] = [];
+
   /**
    * Class names the project's own CSS defines as uppercase tracked labels.
    * A design system usually names this style once in CSS rather than
@@ -211,7 +258,32 @@ export class DesignAnalyzer {
       if (/"(?:@pandacss\/dev|@vanilla-extract\/css|@stitches\/react)"/.test(content)) {
         this.themeExtended = true; // a dedicated token package is a token system
       }
+      // Evidence of accessibility being checked, not assumed.
+      if (/"(?:@axe-core\/|axe-core|pa11y|eslint-plugin-jsx-a11y|@lhci\/cli)/.test(content)) {
+        this.a11yToolingSeen = true;
+      }
+      // Client-only stacks serving marketing pages ship empty documents.
+      if (/"(?:vite|react-scripts)"/.test(content)) this.spaOnlyStack = true;
+      if (/"(?:next|astro|@sveltejs\/kit|@remix-run\/|gatsby|nuxt)"/.test(content)) {
+        this.ssrStackSeen = true;
+      }
       return;
+    }
+    if (relPath.startsWith('.github/workflows/')) this.ciSeen = true;
+    // Operational evidence sitting in the asset tree.
+    if (/\.pdf$/i.test(relPath)) this.pdfAssets++;
+    if (/^(?:public|static|assets)\//.test(relPath) && /\.(?:jpe?g|png|webp|avif)$/i.test(relPath)) {
+      const name = base.toLowerCase();
+      if (!/^(?:favicon|og|icon|logo|apple-touch|placeholder)/.test(name) && name.length > 8) {
+        this.photoAssets++;
+      }
+    }
+    // Dated content: a blog, changelog, or docs tree with real entries.
+    if (
+      /(?:^|\/)(?:blog|posts|changelog|case-studies|docs\/changelog)\//i.test(relPath) &&
+      (/\d{4}-\d{2}/.test(relPath) || /^date:\s*['"]?\d{4}/m.test(content.slice(0, 400)))
+    ) {
+      this.datedContentFiles++;
     }
     if (/^tailwind\.config\.(?:js|ts|mjs|cjs)$/.test(base)) {
       this.tailwindSeen = true;
@@ -295,6 +367,9 @@ export class DesignAnalyzer {
     const body = extend[1];
     if (/(?:colors|fontFamily|spacing|borderRadius|boxShadow)\s*:\s*\{[^}]*[\w'"]/.test(body)) {
       this.themeExtended = true;
+    }
+    if (/(?:spacing|fontSize)\s*:\s*\{[^}]*[\w'"]/.test(body)) {
+      this.scaleExtensionSeen = true;
     }
     // Token names declared under colors:, for the usage-ratio check.
     const colors = body.match(/colors\s*:\s*\{([^}]*)/);
@@ -451,6 +526,46 @@ export class DesignAnalyzer {
       this.fontWeightCounts.set(m[1], (this.fontWeightCounts.get(m[1]) ?? 0) + 1);
     }
 
+    // Focus treatment, evidence links, structured data, claims.
+    this.focusVisibleCount += content.match(/focus-visible:|:focus-visible/g)?.length ?? 0;
+    if (/href\s*=\s*["']tel:/.test(content)) this.telLinkSeen = true;
+    if (/href\s*=\s*["']mailto:/.test(content)) this.mailtoSeen = true;
+    for (const m of content.matchAll(/"@type"\s*:\s*"(\w+)"/g)) this.jsonLdTypes.add(m[1]);
+    for (const m of content.matchAll(/duration-(\d{2,4})\b/g)) this.durationValues.add(m[1]);
+    if (/\bdelay-\d|staggerChildren|stagger\(/.test(content)) this.staggerSeen = true;
+    if (/animate-pulse|[Ss]keleton|<Suspense[^>]+fallback=\{(?!null)/.test(content)) {
+      this.skeletonSeen = true;
+    }
+    if (
+      /\.length\s*===?\s*0[\s\S]{0,400}?(?:<(?:Button|a\b|Link)|Create|Add|Start|Run|Get started|New )/i.test(
+        content,
+      )
+    ) {
+      this.emptyCtaSeen = true;
+    }
+    // Quantitative claims, for the internal-contradiction check. Buckets
+    // normalize synonyms so "clients" and "businesses" compare.
+    for (const m of content.matchAll(
+      /(\d[\d,]{0,9})\s*\+?\s*(?:happy\s+)?(users|developers|customers|clients|businesses|companies|teams)/gi,
+    )) {
+      const value = parseInt(m[1].replace(/,/g, ''), 10);
+      if (value >= 10) this.claims.push({ kind: bucketOf(m[2]), value, raw: m[0].trim(), file: relPath });
+    }
+    for (const m of content.matchAll(
+      /(hundreds|thousands|millions)\s+of\s+(users|developers|customers|clients|businesses|companies|teams)/gi,
+    )) {
+      const value = { hundreds: 100, thousands: 1000, millions: 1_000_000 }[m[1].toLowerCase()]!;
+      this.claims.push({ kind: bucketOf(m[2]), value, raw: m[0].trim(), file: relPath });
+    }
+    for (const m of content.matchAll(/(?:©|&copy;|copyright)\s*(\d{4})/gi)) {
+      this.copyrightYears.push(parseInt(m[1], 10));
+    }
+    // Card-description lengths, for the mechanically-equal-copy check.
+    const descs = [...content.matchAll(
+      /(?:description|desc|body|blurb)\s*:\s*["'\`]([^"'\`]{60,200})["'\`]/g,
+    )].map((m) => m[1].length);
+    if (descs.length >= 4) this.descLengthFiles.push({ relPath, lengths: descs });
+
     // Layer D: interaction feedback coverage.
     this.hoverCount += content.match(/\bhover:/g)?.length ?? 0;
     this.interactiveCount +=
@@ -527,6 +642,10 @@ export class DesignAnalyzer {
     if (/@theme\b/.test(content) && props > 0) this.themeExtended = true;
     for (const m of content.matchAll(/--color-([\w-]+)\s*:/g)) {
       this.tokenNames.add(m[1]);
+    }
+    // Dark mode designed with its own values, not inverted.
+    for (const block of content.matchAll(/(?:\[data-theme=["']?dark["']?\]|\.dark\b|prefers-color-scheme:\s*dark)[^{]*\{([\s\S]*?)\}/g)) {
+      this.darkTokenOverrides += block[1].match(/--[\w-]+\s*:/g)?.length ?? 0;
     }
 
     // Collect label styles: a class that sets uppercase AND letter-spacing is
@@ -752,27 +871,11 @@ export class DesignAnalyzer {
     }
   }
 
-  finish(): DesignAudit {
+  finish(nowYear: number = new Date().getFullYear()): DesignAudit {
     this.emitAggregates();
+    this.emitSecondGeneration(nowYear);
     this.pruneSystematicSizes();
     this.pruneCssLabelSizes();
-
-    let vibe = 0;
-    const layerHits: LayerHit[] = [];
-    for (const { rule, count } of this.hits.values()) {
-      layerHits.push({
-        ruleId: rule.id,
-        title: rule.title,
-        layer: rule.layer,
-        severity: rule.severity,
-        count,
-        vibeWeight: rule.vibeWeight,
-        loadBearing: rule.loadBearing ?? false,
-      });
-      if (rule.vibeWeight > 0) {
-        vibe += Math.round(rule.vibeWeight * 25) + Math.min(count - 1, 4) * 3;
-      }
-    }
 
     // Over-cap rules get one honest note instead of a wall of findings.
     const notes: string[] = [];
@@ -785,19 +888,317 @@ export class DesignAnalyzer {
       }
     }
 
+    // ── distinct tells (five hits of one rule count once) ──
+    const tells = new Set<string>();
+    for (const { rule, count } of this.hits.values()) {
+      if (!rule.tell) continue;
+      // The emoji and div-button tells require three or more instances.
+      if ((rule.tell === 'T-EMOJI-ICON' || rule.tell === 'T-DIV-BUTTON') && count < 3) continue;
+      tells.add(rule.tell);
+    }
+
+    // ── ceilings (6.4): the lowest one binds, applied in grade.ts ──
+    const fired = (id: string) => this.hits.has(id);
+    const hitCount = (id: string) => this.hits.get(id)?.count ?? 0;
+    const ceilings: Ceiling[] = [];
+    if (fired('a11y-outline-suppressed') || (this.interactiveCount >= 15 && this.focusVisibleCount === 0)) {
+      ceilings.push({ max: 65, reason: 'no visible keyboard focus indication', dimension: 'accessibility' });
+      tells.add('T-NO-FOCUS');
+    }
+    if (fired('tokens-no-theme-extension')) {
+      ceilings.push({ max: 60, reason: 'no design token layer exists', dimension: 'system' });
+    }
+    if (fired('states-no-empty-states')) {
+      ceilings.push({ max: 70, reason: 'no empty-state handling anywhere', dimension: 'states' });
+    }
+    if (fired('states-no-error-boundary')) {
+      ceilings.push({ max: 70, reason: 'no error-path handling anywhere', dimension: 'states' });
+    }
+    if (fired('layout-no-responsive')) {
+      ceilings.push({ max: 55, reason: 'no responsive handling at all', dimension: 'layout' });
+    }
+    if (hitCount('copy-emoji-ui') >= 3) {
+      ceilings.push({ max: 75, reason: 'emoji used as functional iconography', dimension: 'typography' });
+    }
+    if (hitCount('a11y-div-onclick') >= 3) {
+      ceilings.push({ max: 68, reason: 'click handlers on non-interactive elements', dimension: 'accessibility' });
+    }
+    if (fired('a11y-zoom-disabled')) {
+      ceilings.push({ max: 60, reason: 'pinch-zoom is disabled', dimension: 'accessibility' });
+    }
+
+    // ── dimension caps from tell effects (Part 7 / 12.3) ──
+    const dimensionCaps: Partial<Record<DimensionId, number>> = {};
+    const cap = (dim: DimensionId, max: number) => {
+      dimensionCaps[dim] = Math.min(dimensionCaps[dim] ?? DIMENSION_MAX[dim], max);
+    };
+    if (tells.has('T-NO-TOKENS')) cap('system', 4);
+    if (tells.has('T-DEFAULT-PALETTE')) { cap('system', 10); cap('color', 4); }
+    if (tells.has('T-GRADIENT-DEFAULT')) cap('color', 8);
+    if (tells.has('T-DEFAULT-TYPEFACE')) cap('typography', 4);
+    if (tells.has('T-EMOJI-ICON')) cap('typography', 8);
+    if (tells.has('T-VAGUE-COPY')) cap('typography', 7);
+    if (tells.has('T-NO-FOCUS')) cap('accessibility', 4);
+    if (tells.has('T-DIV-BUTTON')) cap('accessibility', 6);
+    if (tells.has('T-NO-MOTION-PREF')) { cap('motion', 9); cap('accessibility', 9); }
+    if (tells.has('T-DEAD-INTERACTION')) cap('motion', 6);
+    if (tells.has('T-UNIFORM-RHYTHM')) cap('layout', 7);
+    if (tells.has('T-NO-RESPONSIVE')) cap('layout', 1);
+    if (tells.has('T-PLACEHOLDER-SOCIAL')) cap('evidence', 4);
+    if (tells.has('T2-INTERNAL-CONTRADICTION')) cap('evidence', 2);
+
+    // ── positives: the only way points are earned ──
+    const positives = this.collectPositives();
+
+    const prelaunch =
+      !this.paymentRailSeen && !fired('copy-fabricated-testimonials') && this.pricingArrayFile === null;
+
+    const categoryFit =
+      this.bestLanding === null
+        ? null
+        : fired('layout-template-sequence')
+          ? 'template'
+          : this.bestLanding.parts.length <= 1
+            ? 'distinct'
+            : 'adapted';
+
+    // Legacy meter: derived from tell density so old UI fields keep meaning.
+    const weighted = [...tells].reduce((sum, t) => sum + (t.startsWith('T2-') ? 1.5 : 1), 0);
+
     return {
       findings: this.findings,
       notes,
       provenance: [...new Set(this.provenance)],
-      vibeScore: Math.min(100, vibe),
-      hits: layerHits,
+      tells: [...tells],
+      positives,
+      ceilings,
+      dimensionCaps,
+      prelaunch,
+      categoryFit,
+      uiFileCount: this.uiFileCount,
+      vibeScore: Math.min(100, Math.round(weighted * 9)),
       copySamples: this.copySamples,
     };
   }
 
-  /** The whole-project checks; each files a synthetic rule hit so scoring sees it. */
-  private emitAggregates(): void {
-    const agg = (
+  /**
+   * Positive evidence of decisions (Part 7.6). Each entry names what was
+   * seen, so the report's "what you do well" section is concrete.
+   */
+  private collectPositives(): PositiveSignal[] {
+    const out: PositiveSignal[] = [];
+    const add = (id: string, label: string, dimension: DimensionId, points: number, evidence?: string) =>
+      out.push({ id, label, dimension, points, evidence });
+
+    // D1 — the token layer and its use
+    if (this.themeExtended && (this.tokenUtilityCount > 0 || this.cssCustomPropCount >= 8)) {
+      const semantic = [...this.tokenNames].some(
+        (n) => !/^(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|gray|grey|slate|zinc|neutral|stone)(?:-\d+)?$/.test(n),
+      );
+      add('P-TOKENS', semantic ? 'Semantic token layer, consumed by components' : 'Token layer in use', 'system', semantic ? 12 : 8);
+    } else if (this.themeExtended || this.cssCustomPropCount >= 8) {
+      add('P-TOKENS', 'Token layer defined', 'system', 5);
+    }
+    if (this.scaleExtensionSeen) {
+      add('P-SCALE', 'Defined spacing or type scale', 'system', 4);
+      add('P-SCALE-TYPE', 'Type sizes drawn from a scale', 'typography', 2);
+    }
+
+    // D2 — type decisions
+    if (this.fontFamilies.size >= 2) {
+      add('P-TYPE-PAIR', 'Typefaces with distinct roles', 'typography', 6, [...this.fontFamilies].slice(0, 3).join(', '));
+    } else if (this.fontFamilies.size === 1) {
+      add('P-TYPE-LOADED', 'A chosen face, loaded deliberately', 'typography', 3, [...this.fontFamilies][0]);
+    }
+
+    // D3 — color decisions
+    if (this.darkTokenOverrides >= 4) {
+      add('P-DARK-MODE', 'Dark mode with its own token values', 'color', 4);
+    }
+    if (this.a11yToolingSeen) {
+      add('P-CONTRAST-VERIFIED', 'Accessibility tooling in the project', 'color', 2);
+      add('P-CONTRAST-VERIFIED-A11Y', 'Accessibility tooling in the project', 'accessibility', 2);
+    }
+    if (this.themeExtended && this.hueFamilies.size <= 3 && this.uiFileCount >= 3) {
+      add('P-RESTRAINT', 'Restrained accent range', 'color', 3);
+    }
+
+    // D4 — layout decisions
+    if (this.breakpointHits + this.mediaQueryHits >= 10) {
+      add('P-RESPONSIVE', 'Responsive decisions at multiple breakpoints', 'layout', 4);
+    } else if (this.breakpointHits + this.mediaQueryHits > 0) {
+      add('P-RESPONSIVE', 'Responsive handling present', 'layout', 2);
+    }
+    if (this.ogMetaSeen) add('P-SHARE-META', 'Share preview configured', 'layout', 2);
+    if (this.photoAssets >= 3) add('P-REAL-ASSETS', 'Real image assets, not placeholders', 'layout', 2);
+
+    // D5 — interaction decisions
+    if (this.hoverCount >= 10) add('P-HOVER', 'Hover and press feedback throughout', 'motion', 4);
+    else if (this.hoverCount > 0) add('P-HOVER', 'Some interaction feedback', 'motion', 2);
+    if (this.pendingSignalSeen) add('P-PENDING', 'Pending feedback on mutations', 'motion', 3);
+    if (this.guardsMotion) {
+      add('P-REDUCED-MOTION', 'Reduced-motion preference respected', 'motion', 3);
+      add('P-REDUCED-MOTION-A11Y', 'Reduced-motion preference respected', 'accessibility', 1);
+    }
+    if (this.durationValues.size >= 3 && this.staggerSeen) {
+      add('P-MOTION-INTENT', 'Motion varies by role, with stagger', 'motion', 4);
+    } else if (this.durationValues.size >= 3) {
+      add('P-MOTION-INTENT', 'Durations chosen per role', 'motion', 2);
+    }
+
+    // D6 — state coverage, the strongest proxy for human iteration
+    if (this.emptyBranchSeen) {
+      add('P-EMPTY-STATE', this.emptyCtaSeen ? 'Empty states with an action' : 'Empty states handled', 'states', this.emptyCtaSeen ? 6 : 4);
+    }
+    if (this.errorBoundarySeen) add('P-ERROR-STATE', 'Error paths render for the user', 'states', 5);
+    if (this.skeletonSeen) add('P-LOADING', 'Loading handled with skeletons or fallbacks', 'states', 4);
+    else if (this.loadingSeen) add('P-LOADING', 'Loading states present', 'states', 2);
+
+    // D7 — accessibility decisions
+    if (this.focusVisibleCount >= 3) add('P-FOCUS-VISIBLE', 'Deliberate focus-visible treatment', 'accessibility', 6);
+    if (this.htmlLangFiles > 0) add('P-LANG', 'Document language declared', 'accessibility', 1);
+    if (this.a11yToolingSeen && this.ciSeen) add('P-A11Y-CI', 'Accessibility checks wired into CI', 'accessibility', 3);
+
+    // D8 — operational evidence
+    if (this.jsonLdTypes.has('PostalAddress') || this.jsonLdTypes.has('LocalBusiness')) {
+      add('P-ADDRESS', 'Physical address in structured data', 'evidence', 2);
+    }
+    if (this.telLinkSeen || this.mailtoSeen) add('P-CONTACT', 'Direct contact link', 'evidence', 1);
+    if (this.photoAssets >= 4) add('P-OWN-PHOTOS', 'Own photography or product imagery', 'evidence', 3);
+    if (this.pdfAssets >= 1) add('P-DOCUMENTS', 'Real documents in the asset tree', 'evidence', 2);
+    if ([...this.jsonLdTypes].some((t) => ['LocalBusiness', 'Organization', 'Product'].includes(t))) {
+      add('P-STRUCTURED-DATA', 'Structured business data', 'evidence', 1);
+    }
+    if (this.datedContentFiles >= 3) add('P-DATED-CONTENT', 'Dated content with real entries', 'evidence', 2);
+    if (this.legalFiles.some((f) => !f.stubby)) add('P-REAL-LEGAL', 'Legal pages with real content', 'evidence', 2);
+    if (this.paymentRailSeen) add('P-PAYMENT-RAIL', 'A working payment integration', 'evidence', 2);
+
+    return out;
+  }
+
+  /** Generation-two detections (Part 12.3) that need whole-project context. */
+  private emitSecondGeneration(nowYear: number): void {
+    const agg = this.aggregateEmitter();
+
+    // T2-INTERNAL-CONTRADICTION — the clearest signal in the labeled set.
+    const byKind = new Map<string, { min: Claim; max: Claim }>();
+    for (const c of this.claims) {
+      const cur = byKind.get(c.kind);
+      if (!cur) byKind.set(c.kind, { min: c, max: c });
+      else {
+        if (c.value < cur.min.value) cur.min = c;
+        if (c.value > cur.max.value) cur.max = c;
+      }
+    }
+    for (const { min, max } of byKind.values()) {
+      if (max.value >= min.value * 10) {
+        agg(
+          {
+            id: 'evidence-contradiction',
+            title: 'Two claims on the site cannot both be true',
+            severity: 'high',
+            layer: 'evidence',
+            tell: 'T2-INTERNAL-CONTRADICTION',
+            vibeWeight: 1,
+            explanation:
+              `One place says "${min.raw}" and another says "${max.raw}". ` +
+              'Both were written to fill a slot and neither was checked ' +
+              'against the other. A visitor who notices this stops believing ' +
+              'everything else on the page.',
+            recommendation:
+              'Pick the number that is true and use it everywhere. If neither ' +
+              'is true yet, remove both. An honest page without counts beats ' +
+              'one that argues with itself.',
+            verify: 'Every quantitative claim on the site should agree with every other.',
+          },
+          min.file,
+          `"${min.raw}" vs "${max.raw}"`,
+        );
+        break;
+      }
+    }
+
+    // Stale copyright: part of the dead-scaffold family.
+    const maxYear = Math.max(0, ...this.copyrightYears);
+    if (maxYear > 0 && maxYear <= nowYear - 2) {
+      agg(
+        {
+          id: 'evidence-stale-copyright',
+          title: `Copyright year is ${maxYear}`,
+          severity: 'low',
+          layer: 'evidence',
+          tell: 'T2-DEAD-SCAFFOLD',
+          vibeWeight: 0.4,
+          explanation:
+            `The footer says ${maxYear} and it is ${nowYear}. A stale year is ` +
+            'a small thing that tells visitors nobody is maintaining this.',
+          recommendation:
+            'Render the year from the clock instead of hardcoding it.',
+          verify: 'The footer year should match the current year.',
+        },
+        undefined,
+        `© ${maxYear}`,
+      );
+    }
+
+    // Mechanically equal content blocks.
+    for (const { relPath, lengths } of this.descLengthFiles) {
+      const mean = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+      const sd = Math.sqrt(lengths.reduce((a, b) => a + (b - mean) ** 2, 0) / lengths.length);
+      if (mean > 0 && sd / mean < 0.12) {
+        agg(
+          {
+            id: 'layout-uniform-copy-length',
+            title: 'Card descriptions are all the same length',
+            severity: 'low',
+            layer: 'layout',
+            tell: 'T-UNIFORM-COPY-LENGTH',
+            vibeWeight: 0.5,
+            explanation:
+              `${lengths.length} descriptions in this file land within a few ` +
+              'characters of each other. Copy that was written to say ' +
+              'something varies in length. Copy that was padded to fill a ' +
+              'template does not.',
+            recommendation:
+              'Rewrite each description to say the one specific thing that ' +
+              'card is for, at whatever length that takes.',
+            verify: 'Card copy should vary in length because it varies in content.',
+          },
+          relPath,
+        );
+        break;
+      }
+    }
+
+    // Client-rendered shell serving a marketing page.
+    if (this.spaOnlyStack && !this.ssrStackSeen && this.bestLanding) {
+      agg(
+        {
+          id: 'layout-empty-shell',
+          title: 'Marketing page served as an empty client-rendered shell',
+          severity: 'medium',
+          layer: 'layout',
+          tell: 'T2-EMPTY-SHELL',
+          confidence: 'likely',
+          vibeWeight: 0.6,
+          explanation:
+            'The served HTML contains a root element and scripts. All ' +
+            'content renders client-side, so search engines and link ' +
+            'previews see an empty document. For a public marketing page ' +
+            'this is a real reach problem, not an architectural taste.',
+          recommendation:
+            'Pre-render the public pages: a static build step or a ' +
+            'framework with server rendering for the marketing routes.',
+          verify: 'View source on the deployed landing page. The copy should be in the HTML.',
+        },
+        this.bestLanding.relPath,
+      );
+    }
+  }
+
+  /** Files a whole-project finding as a synthetic rule hit. */
+  private aggregateEmitter() {
+    return (
       rule: Omit<DesignRule, 'scope' | 'regex' | 'extensions' | 'maxFindings'> & {
         confidence?: Confidence;
       },
@@ -824,6 +1225,11 @@ export class DesignAnalyzer {
         recommendation: rule.recommendation,
       });
     };
+  }
+
+  /** The whole-project checks; each files a synthetic rule hit so scoring sees it. */
+  private emitAggregates(): void {
+    const agg = this.aggregateEmitter();
 
     // ── Layer A: the token system, or its absence ──
     if (this.tailwindSeen && this.uiFileCount >= 3 && !this.themeExtended && this.cssCustomPropCount < 8) {
@@ -832,7 +1238,8 @@ export class DesignAnalyzer {
           id: 'tokens-no-theme-extension',
           title: 'Your design system is the framework defaults',
           severity: 'high',
-          layer: 'tokens',
+          layer: 'system',
+          tell: 'T-NO-TOKENS',
           vibeWeight: 0.7,
           confidence: 'verified',
           explanation:
@@ -858,7 +1265,8 @@ export class DesignAnalyzer {
           id: 'tokens-defaults-in-markup',
           title: 'Color decisions made per element, not from tokens',
           severity: 'medium',
-          layer: 'tokens',
+          layer: 'system',
+          tell: 'T-DEFAULT-PALETTE',
           vibeWeight: 0.5,
           explanation:
             `Default-scale utilities outnumber project tokens ${this.defaultUtilityCount} ` +
@@ -888,7 +1296,8 @@ export class DesignAnalyzer {
             id: 'tokens-spacing-monotone',
             title: 'One spacing value doing every job',
             severity: 'medium',
-            layer: 'tokens',
+            layer: 'layout',
+            tell: 'T-UNIFORM-RHYTHM',
             vibeWeight: 0.4,
             explanation:
               `A single spacing step (${topValue}) accounts for over 80% of ` +
@@ -912,7 +1321,7 @@ export class DesignAnalyzer {
           id: 'tokens-spacing-adhoc',
           title: 'Arbitrary pixel spacing scattered through the markup',
           severity: 'low',
-          layer: 'tokens',
+          layer: 'layout',
           vibeWeight: 0.4,
           explanation:
             `${this.arbitrarySpacingCount} spacing values are one-off pixel ` +
@@ -934,7 +1343,7 @@ export class DesignAnalyzer {
         id: 'tokens-radius-scatter',
         title: `${this.radiusTokens.size} different corner radii`,
         severity: 'low',
-        layer: 'tokens',
+        layer: 'system',
         vibeWeight: 0.25,
         explanation:
           'Cards, buttons, and inputs each round their corners differently. ' +
@@ -953,7 +1362,7 @@ export class DesignAnalyzer {
         id: 'tokens-shadow-scatter',
         title: `${this.shadowTokens.size} different shadow depths`,
         severity: 'low',
-        layer: 'tokens',
+        layer: 'system',
         vibeWeight: 0.2,
         explanation:
           'Shadows form an elevation language. A dropdown, a modal, and a ' +
@@ -973,7 +1382,7 @@ export class DesignAnalyzer {
           id: 'tokens-icon-mix',
           title: 'Icons drawn from multiple sets',
           severity: 'medium',
-          layer: 'tokens',
+          layer: 'system',
           vibeWeight: 0.3,
           explanation:
             'Icons from different sets carry different stroke weights, corner ' +
@@ -996,7 +1405,7 @@ export class DesignAnalyzer {
           id: 'tokens-uikit-uncustomized',
           title: `${this.uiKitFiles.size} kit components installed, ${used} used`,
           severity: 'low',
-          layer: 'tokens',
+          layer: 'system',
           vibeWeight: 0.8,
           explanation:
             'The full component kit is scaffolded but mostly unused, the mark ' +
@@ -1019,6 +1428,7 @@ export class DesignAnalyzer {
           title: 'Lists render, but never the empty case',
           severity: 'high',
           layer: 'states',
+          tell: 'T-NO-EMPTY',
           vibeWeight: 0.5,
           explanation:
             `${this.listRenderFiles} components render collections and none ` +
@@ -1059,6 +1469,7 @@ export class DesignAnalyzer {
         title: 'No error boundary anywhere in the tree',
         severity: 'high',
         layer: 'states',
+        tell: 'T-NO-ERROR',
         vibeWeight: 0.3,
         confidence: 'verified',
         explanation:
@@ -1079,6 +1490,7 @@ export class DesignAnalyzer {
         title: 'One default face doing every typographic job',
         severity: 'medium',
         layer: 'typography',
+        tell: 'T-DEFAULT-TYPEFACE',
         vibeWeight: 0.3,
         explanation:
           'No font is imported and no family is configured, so the framework ' +
@@ -1147,6 +1559,7 @@ export class DesignAnalyzer {
         title: 'Interactive elements with no hover or press feedback',
         severity: 'medium',
         layer: 'motion',
+        tell: 'T-DEAD-INTERACTION',
         vibeWeight: 0.3,
         explanation:
           `${this.interactiveCount} interactive elements exist and none ` +
@@ -1189,6 +1602,7 @@ export class DesignAnalyzer {
         title: 'Animations ignore the reduced-motion preference',
         severity: 'low',
         layer: 'motion',
+        tell: 'T-NO-MOTION-PREF',
         vibeWeight: 0,
         explanation:
           'The project animates but never checks prefers-reduced-motion. ' +
@@ -1237,6 +1651,7 @@ export class DesignAnalyzer {
         title: 'No responsive breakpoints anywhere',
         severity: 'high',
         layer: 'layout',
+        tell: 'T-NO-RESPONSIVE',
         vibeWeight: 0,
         explanation:
           'Not a single breakpoint or media query exists in the project, so ' +
@@ -1281,7 +1696,7 @@ export class DesignAnalyzer {
           id: 'copy-legal-stub',
           title: 'Placeholder legal pages',
           severity: 'high',
-          layer: 'copy',
+          layer: 'evidence',
           vibeWeight: 0.8,
           explanation:
             'The privacy policy or terms look generated and unedited, with ' +
@@ -1302,7 +1717,7 @@ export class DesignAnalyzer {
         id: 'copy-legal-missing',
         title: 'Legal links with no legal pages in the repo',
         severity: 'medium',
-        layer: 'copy',
+        layer: 'evidence',
         vibeWeight: 0.6,
         explanation:
           'The site links to privacy or terms pages that do not exist in ' +
@@ -1321,7 +1736,7 @@ export class DesignAnalyzer {
         id: 'copy-readme-template',
         title: `README is still ${this.readmeTemplate}`,
         severity: 'low',
-        layer: 'copy',
+        layer: 'evidence',
         vibeWeight: 0.9,
         confidence: 'verified',
         explanation:
@@ -1340,7 +1755,7 @@ export class DesignAnalyzer {
         id: 'copy-readme-generated-style',
         title: 'README written in generator house style',
         severity: 'low',
-        layer: 'copy',
+        layer: 'evidence',
         vibeWeight: 0.6,
         explanation:
           'Emoji section headers and a "Made with ❤️" footer are the stock ' +
@@ -1359,7 +1774,8 @@ export class DesignAnalyzer {
           id: 'copy-fake-auth',
           title: 'Login form that does not authenticate',
           severity: 'high',
-          layer: 'copy',
+          layer: 'evidence',
+          tell: 'T2-DEAD-SCAFFOLD',
           vibeWeight: 0.85,
           explanation:
             'This login form navigates straight into the app without calling ' +
@@ -1380,7 +1796,8 @@ export class DesignAnalyzer {
           id: 'copy-pricing-no-rail',
           title: 'Pricing table with no way to pay',
           severity: 'medium',
-          layer: 'copy',
+          layer: 'evidence',
+          tell: 'T2-DEAD-SCAFFOLD',
           vibeWeight: 0.8,
           explanation:
             'The page shows paid tiers, but no payment integration exists ' +
@@ -1403,7 +1820,8 @@ export class DesignAnalyzer {
           id: 'copy-missing-routes',
           title: 'Navigation links to pages that do not exist',
           severity: 'medium',
-          layer: 'copy',
+          layer: 'evidence',
+          tell: 'T2-DEAD-SCAFFOLD',
           vibeWeight: 0.7,
           explanation:
             `The site links to ${missingRoutes.slice(0, 6).join(', ')} and no ` +
@@ -1425,7 +1843,7 @@ export class DesignAnalyzer {
           id: 'copy-scaffold-assets',
           title: 'Starter-kit assets still in public/',
           severity: 'low',
-          layer: 'copy',
+          layer: 'evidence',
           vibeWeight: 0.85,
           confidence: 'verified',
           explanation:
@@ -1444,7 +1862,7 @@ export class DesignAnalyzer {
         id: 'copy-no-share-preview',
         title: 'No social-share preview configured',
         severity: 'low',
-        layer: 'copy',
+        layer: 'evidence',
         vibeWeight: 0.2,
         explanation:
           'The site has a marketing page but no share metadata, so posting ' +
@@ -1462,7 +1880,7 @@ export class DesignAnalyzer {
         id: 'copy-console-debris',
         title: `${this.consoleLogCount} console.log calls left in the code`,
         severity: 'low',
-        layer: 'copy',
+        layer: 'evidence',
         vibeWeight: 0.4,
         explanation:
           'Anyone who opens the browser console watches internal state ' +
@@ -1480,7 +1898,7 @@ export class DesignAnalyzer {
         id: 'copy-todo-debris',
         title: `${this.todoCount} TODO markers in the code`,
         severity: 'low',
-        layer: 'copy',
+        layer: 'evidence',
         vibeWeight: 0.3,
         explanation:
           'A scattering of TODOs is normal. Dozens of them, especially ' +
@@ -1534,5 +1952,4 @@ export class DesignAnalyzer {
   }
 }
 
-export { CRAFT_LAYERS };
 export type { CraftLayerId };

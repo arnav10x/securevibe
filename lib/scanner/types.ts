@@ -117,8 +117,33 @@ export interface ReportCard {
   // ── Craft (the headline — how much judgment shows after generation) ──
   /** Craft letter grade. */
   craftGrade: string;
-  /** 0–100 craft score. */
+  /**
+   * 0–100 craft score, EARNED FROM ZERO per SECUREVIBE-UIUX.md: positive
+   * evidence earns dimension points, the lowest triggered ceiling bounds
+   * the total, and the tell-density multiplier applies last.
+   */
   craftScore: number;
+  /** Band label for the score, e.g. "Generated, lightly edited". */
+  craftBand?: string;
+  /** Estimated percentile for the band, e.g. "Top 50%". */
+  craftPercentile?: string;
+  /** Positive signals that earned points — the "what you do well" section. */
+  positives?: { id: string; label: string; dimension: string; points: number; evidence?: string }[];
+  /** Distinct generic-default tells that fired, with the multiplier applied. */
+  tells?: string[];
+  tellMultiplier?: number;
+  /** Template / adapted / distinct, judged against the landing structure. */
+  categoryFit?: 'template' | 'adapted' | 'distinct' | null;
+  /**
+   * The full scoring input, kept so the UI can recompute projections
+   * ("fixing this dimension takes you to N") without guessing.
+   */
+  craftDetail?: {
+    positives: { id: string; label: string; dimension: string; points: number }[];
+    tells: string[];
+    ceilings: { max: number; reason: string; dimension: string }[];
+    dimensionCaps: Partial<Record<string, number>>;
+  };
   /**
    * When the accessibility floor caps the craft score, this says why.
    * An interface keyboard users cannot operate is not well designed,

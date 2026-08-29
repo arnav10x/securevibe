@@ -21,6 +21,9 @@ const BANNED_TERMS = [
   'elevate your',
   'unlock the',
   'transform your',
+  'delve',
+  'leverage',
+  'game-changer',
 ];
 
 /** Fix language must not condescend. */

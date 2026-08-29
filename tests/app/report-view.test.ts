@@ -17,15 +17,20 @@ describe('panelForFinding', () => {
     }
   });
 
-  it('maps rule-id prefixes to their layers', () => {
+  it('maps rule ids to their dimensions', () => {
     const cases: [string, string][] = [
-      ['tokens-multi-hue-gradient', 'tokens'],
+      ['tokens-multi-hue-gradient', 'color'],
+      ['tokens-no-theme-extension', 'system'],
       ['states-no-error-boundary', 'states'],
       ['type-below-floor', 'typography'],
+      ['copy-emoji-ui', 'typography'],
       ['motion-transition-all', 'motion'],
       ['layout-template-sequence', 'layout'],
-      ['copy-lorem', 'copy'],
+      ['copy-lorem', 'evidence'],
+      ['copy-dead-link', 'evidence'],
       ['a11y-img-no-alt', 'accessibility'],
+      ['a11y-contrast-default-pair', 'color'],
+      ['evidence-contradiction', 'evidence'],
     ];
     for (const [ruleId, layer] of cases) {
       expect(panelForFinding({ checkType: 'design', ruleId, title: 'x' })).toBe(layer);
@@ -35,7 +40,7 @@ describe('panelForFinding', () => {
   it('falls back to title matching for rows saved before rule_id existed', () => {
     expect(
       panelForFinding({ checkType: 'design', title: '5 different corner radii' }),
-    ).toBe('tokens');
+    ).toBe('system');
     expect(
       panelForFinding({ checkType: 'design', title: 'Lists render, but never the empty case' }),
     ).toBe('states');
@@ -44,10 +49,10 @@ describe('panelForFinding', () => {
     ).toBe('accessibility');
   });
 
-  it('orders the rings craft-first with exposure last', () => {
-    expect(PANEL_ORDER[0].id).toBe('tokens');
+  it('orders the rings by dimension with exposure last', () => {
+    expect(PANEL_ORDER[0].id).toBe('system');
     expect(PANEL_ORDER[PANEL_ORDER.length - 1].id).toBe('exposure');
-    expect(PANEL_ORDER).toHaveLength(8);
+    expect(PANEL_ORDER).toHaveLength(9);
   });
 });
 
@@ -89,48 +94,42 @@ describe('readinessScore', () => {
 
 describe('projectedReadiness (the hover preview math)', () => {
   const report = {
-    craftScore: 27,
+    craftScore: 20,
     securityScore: 76,
-    craftCapReason: null,
-    categories: [
-      { id: 'tokens', score: 15 },
-      { id: 'states', score: 0 },
-      { id: 'typography', score: 70 },
-      { id: 'motion', score: 86 },
-      { id: 'layout', score: 18 },
-      { id: 'copy', score: 0 },
-      { id: 'accessibility', score: 0 },
-    ],
+    craftDetail: {
+      positives: [
+        { id: 'a', label: 'x', dimension: 'system', points: 10 },
+        { id: 'b', label: 'x', dimension: 'states', points: 8 },
+      ],
+      tells: ['T-EMOJI-ICON', 'T-NO-EMPTY'],
+      ceilings: [{ max: 70, reason: 'no empty states', dimension: 'states' }],
+      dimensionCaps: { typography: 8 },
+    },
   };
 
-  it('recomputes craft with the fixed layer at 100, on the published weights', () => {
-    // Fixing copy (weight 10, score 0) adds 10 weighted points.
-    const base = projectedReadiness(report, 'copy');
-    const weighted =
-      15 * 22 + 0 * 20 + 70 * 15 + 86 * 13 + 18 * 12 + 100 * 10 + 0 * 8;
-    expect(base).toBe(Math.min(Math.round(weighted / 100), 76));
+  it('fixing a dimension earns its full budget and drops its tells', () => {
+    const projected = projectedReadiness(report, 'states');
+    // states goes to 13, its tell (T-NO-EMPTY) leaves the density count,
+    // and the ceiling it owns lifts.
+    expect(projected).toBeGreaterThan(report.craftScore);
+    expect(projected).toBeLessThanOrEqual(76);
   });
 
   it('fixing exposure moves readiness to the craft score', () => {
-    expect(projectedReadiness(report, 'exposure')).toBe(27);
-    expect(projectedReadiness({ ...report, craftScore: 90, securityScore: 40 }, 'exposure')).toBe(90);
-  });
-
-  it('keeps the accessibility-floor cap unless accessibility is the layer fixed', () => {
-    const capped = {
-      ...report,
-      craftScore: 60,
-      craftCapReason: 'Capped at 60: focus outline removed.',
-      categories: report.categories.map((c) => ({ ...c, score: c.id === 'accessibility' ? 0 : 90 })),
-    };
-    // Fixing a non-a11y layer cannot lift the cap.
-    expect(projectedReadiness(capped, 'copy')).toBeLessThanOrEqual(60);
-    // Fixing accessibility lifts it.
-    expect(projectedReadiness(capped, 'accessibility')).toBeGreaterThan(60);
+    expect(projectedReadiness(report, 'exposure')).toBe(20);
+    expect(
+      projectedReadiness({ ...report, craftScore: 90, securityScore: 40 }, 'exposure'),
+    ).toBe(90);
   });
 
   it('never exceeds the other axis', () => {
-    const held = { ...report, securityScore: 30 };
-    expect(projectedReadiness(held, 'tokens')).toBeLessThanOrEqual(30);
+    const held = { ...report, securityScore: 25 };
+    expect(projectedReadiness(held, 'system')).toBeLessThanOrEqual(25);
+  });
+
+  it('degrades gracefully without stored detail', () => {
+    expect(
+      projectedReadiness({ craftScore: 30, securityScore: 80 }, 'system'),
+    ).toBe(30);
   });
 });
