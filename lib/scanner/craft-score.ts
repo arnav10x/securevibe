@@ -79,6 +79,7 @@ export const TELL_WEIGHTS: Record<string, number> = {
   'T-DIV-BUTTON': 1,
   'T-NO-MOTION-PREF': 1,
   'T-UNIFORM-RHYTHM': 1,
+  'T-NO-MOBILE-PRIORITY': 1,
   'T-NO-RESPONSIVE': 1,
   'T-VIEWPORT-LOCK': 1,
   // generation two
@@ -175,6 +176,7 @@ export const TELL_DIMENSION: Record<string, DimensionId> = {
   'T-DIV-BUTTON': 'accessibility',
   'T-NO-MOTION-PREF': 'motion',
   'T-UNIFORM-RHYTHM': 'layout',
+  'T-NO-MOBILE-PRIORITY': 'layout',
   'T-NO-RESPONSIVE': 'layout',
   'T-VIEWPORT-LOCK': 'accessibility',
   'T2-DOCUMENT-COSPLAY': 'evidence',

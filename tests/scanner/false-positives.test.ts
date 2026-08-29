@@ -231,3 +231,41 @@ describe('grading keeps test fixtures out of the headline', () => {
     expect(a.grade).toBe('F');
   });
 });
+
+describe('mobile priority: column-mirroring versus real decisions', () => {
+  function analyze(files: Record<string, string>) {
+    const d = new DesignAnalyzer();
+    for (const [p, c] of Object.entries(files)) d.addFile(p, c);
+    return d.finish(2026);
+  }
+  const cols = '<div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">x</div>\n'.repeat(4);
+
+  it('fires when breakpoints only ever change column counts', () => {
+    const audit = analyze({
+      'app/a.tsx': cols,
+      'app/b.tsx': cols,
+      'app/c.tsx': cols,
+    });
+    expect(audit.findings.map((f) => f.ruleId)).toContain('layout-no-mobile-priority');
+    expect(audit.tells).toContain('T-NO-MOBILE-PRIORITY');
+  });
+
+  it('stays quiet when visibility or order varies by screen', () => {
+    const audit = analyze({
+      'app/a.tsx': cols,
+      'app/b.tsx': cols + '<aside className="hidden lg:block">detail</aside>\n<p className="order-2 md:order-1">first on desktop</p>\n<span className="md:hidden">compact</span>\n',
+      'app/c.tsx': cols,
+    });
+    expect(audit.findings.map((f) => f.ruleId)).not.toContain('layout-no-mobile-priority');
+    expect(audit.positives.map((p) => p.id)).toContain('P-MOBILE-PRIORITY');
+  });
+
+  it('leaves projects with no breakpoints to the no-responsive signal', () => {
+    const audit = analyze({
+      'app/a.tsx': '<div className="p-4">x</div>\n<div className="p-4">y</div>\n',
+      'app/b.tsx': '<div className="p-4">x</div>\n',
+      'app/c.tsx': '<div className="p-4">x</div>\n',
+    });
+    expect(audit.findings.map((f) => f.ruleId)).not.toContain('layout-no-mobile-priority');
+  });
+});
