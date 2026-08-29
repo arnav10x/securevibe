@@ -131,6 +131,8 @@ export class DesignAnalyzer {
 
   private uiFileCount = 0;
   private breakpointHits = 0;
+  /** Responsive VISIBILITY and ORDER decisions — what mobile priority is. */
+  private responsivePriorityHits = 0;
   private mediaQueryHits = 0;
   private fontFamilies = new Set<string>();
   private fontWeightCounts = new Map<string, number>();
@@ -447,6 +449,11 @@ export class DesignAnalyzer {
 
   private collectUiSignals(relPath: string, content: string): void {
     this.breakpointHits += content.match(/\b(?:sm|md|lg|xl|2xl):/g)?.length ?? 0;
+    // (?!-) keeps md:grid-cols-3 (a column mirror) from counting as md:grid
+    // (a visibility decision).
+    this.responsivePriorityHits +=
+      content.match(/\b(?:sm|md|lg|xl|2xl):(?:hidden|inline-block|block|inline|flex|grid)(?!-)\b|\b(?:sm|md|lg|xl|2xl):order-\d+\b/g)
+        ?.length ?? 0;
 
     // Internal links, for the missing-routes check. Query/hash stripped.
     for (const m of content.matchAll(/(?:href|to)\s*=\s*["'](\/[\w\-/]*)/g)) {
@@ -1028,6 +1035,9 @@ export class DesignAnalyzer {
       add('P-RESPONSIVE', 'Responsive decisions at multiple breakpoints', 'layout', 4);
     } else if (this.breakpointHits + this.mediaQueryHits > 0) {
       add('P-RESPONSIVE', 'Responsive handling present', 'layout', 2);
+    }
+    if (this.responsivePriorityHits >= 3) {
+      add('P-MOBILE-PRIORITY', 'Content priority decided per screen size', 'layout', 3);
     }
     if (this.ogMetaSeen) add('P-SHARE-META', 'Share preview configured', 'layout', 2);
     if (this.photoAssets >= 3) add('P-REAL-ASSETS', 'Real image assets, not placeholders', 'layout', 2);
@@ -1643,6 +1653,37 @@ export class DesignAnalyzer {
         },
         this.bestLanding.relPath,
       );
+    }
+
+    // Breakpoints exist, but every one of them only re-flows columns:
+    // nothing is hidden, shown, or reordered per screen. Mobile receives
+    // the entire desktop page, stacked — the endless-scroll page.
+    if (
+      this.uiFileCount >= 3 &&
+      this.breakpointHits >= 10 &&
+      this.responsivePriorityHits === 0
+    ) {
+      agg({
+        id: 'layout-no-mobile-priority',
+        title: 'Mobile gets the whole desktop page, stacked',
+        severity: 'medium',
+        layer: 'layout',
+        tell: 'T-NO-MOBILE-PRIORITY',
+        vibeWeight: 0.4,
+        explanation:
+          'Breakpoints exist, but every one of them only changes column ' +
+          'counts. Nothing is hidden, summarized, or reordered for small ' +
+          'screens, so a phone receives the entire desktop page stacked ' +
+          'into one very long scroll. Real responsive design decides what ' +
+          'matters most on a small screen and defers the rest.',
+        recommendation:
+          'Pick what a phone visitor needs first and put it on the first ' +
+          'screen. Hide or collapse secondary sections on small screens ' +
+          'and reorder where reading order should differ from desktop.',
+        verify:
+          'The mobile page should be meaningfully shorter than the desktop ' +
+          'page, not the same content in one column.',
+      });
     }
 
     if (this.uiFileCount >= 3 && this.breakpointHits === 0 && this.mediaQueryHits === 0) {

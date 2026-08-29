@@ -387,6 +387,15 @@ export function ScanDashboard({
   };
   const preview = hovered ? projectFor(hovered) : null;
 
+  const selectPanel = (id: PanelId) => {
+    setActive(id);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      requestAnimationFrame(() => {
+        document.getElementById('scan-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  };
+
   const activeMeta = PANEL_ORDER.find((p) => p.id === active)!;
   const activeFindings = byPanel.get(active) ?? [];
   const groups = groupBySignal(activeFindings);
@@ -407,23 +416,25 @@ export function ScanDashboard({
       <div className="space-y-5 lg:grid lg:grid-cols-[290px_minmax(0,1fr)] lg:items-start lg:gap-5 lg:space-y-0">
       {/* .plate pins position:relative in globals, which beats the layered
           sticky utility — so the sticky wrapper is a bare div. */}
-      <div className="lg:sticky lg:top-24">
+      <div className="sticky top-14 z-30 lg:top-24">
       <section className="plate overflow-hidden">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6">
+        <div className="hidden flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6 lg:flex">
           <p className="label">Where the judgment shows</p>
-          <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute lg:hidden">
-            Select a layer
-          </p>
         </div>
 
-        <div className="grid grid-cols-3 lg:hidden" role="tablist" aria-label="Report areas">
-          {PANEL_ORDER.map((p, i) => {
+        {/* On phones the meters are ONE swipeable row, pinned under the
+            header, so the selector never scrolls away and the page loses
+            two rows of height. Tapping a meter jumps to its findings. */}
+        <div
+          className="flex w-0 min-w-full snap-x overflow-x-auto lg:hidden"
+          role="tablist"
+          aria-label="Report areas"
+        >
+          {PANEL_ORDER.map((p) => {
             const count = byPanel.get(p.id)?.length ?? 0;
             const isActive = active === p.id;
             const score = scoreFor(p.id);
             const clear = count === 0;
-            // Earned-from-zero: a panel can have no findings AND no earned
-            // evidence. That is not "clear" — it is unproven.
             const healthy = clear && (score === null || score >= WEAK);
             return (
               <button
@@ -432,38 +443,19 @@ export function ScanDashboard({
                 role="tab"
                 aria-selected={isActive}
                 title={p.hint}
-                onClick={() => setActive(p.id)}
-                onMouseEnter={() => setHovered(p.id)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(p.id)}
-                onBlur={() => setHovered(null)}
-                className={`flex cursor-pointer flex-col items-center gap-1.5 border-b border-[var(--line)] px-2 pb-3.5 pt-4 transition-all focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:px-3 ${
-                  i % 3 === 2 ? '' : 'border-r'
-                } ${isActive ? 'bg-well' : 'hover:bg-sheet'} ${
-                  healthy && !isActive ? 'opacity-45 hover:opacity-90' : ''
-                }`}
+                onClick={() => selectPanel(p.id)}
+                className={`flex w-[92px] shrink-0 snap-start cursor-pointer flex-col items-center gap-1 border-r border-[var(--line)] px-2 pb-2.5 pt-3 transition-colors last:border-r-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
+                  isActive ? 'bg-well' : ''
+                } ${healthy && !isActive ? 'opacity-45' : ''}`}
                 style={isActive ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
               >
-                <Gauge score={score} />
-                <span className="text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
+                <Gauge score={score} small />
+                <span className="w-full truncate text-center text-[10.5px] font-semibold leading-tight tracking-tight text-ink">
                   {p.label}
                 </span>
-                {healthy ? (
-                  <span className="mono-tight flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
-                    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                      <path d="M2 6.5 5 9l5-6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    clear
-                  </span>
-                ) : clear ? (
-                  <span className="mono-tight font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
-                    no evidence yet
-                  </span>
-                ) : (
-                  <span className="text-[11.5px] font-semibold tabular-nums text-ink">
-                    {count} finding{count === 1 ? '' : 's'}
-                  </span>
-                )}
+                <span className="mono-tight font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+                  {healthy ? 'clear' : clear ? 'unproven' : count}
+                </span>
               </button>
             );
           })}
@@ -488,7 +480,7 @@ export function ScanDashboard({
                 role="tab"
                 aria-selected={isActive}
                 title={p.hint}
-                onClick={() => setActive(p.id)}
+                onClick={() => selectPanel(p.id)}
                 onMouseEnter={() => setHovered(p.id)}
                 onMouseLeave={() => setHovered(null)}
                 onFocus={() => setHovered(p.id)}
@@ -521,7 +513,7 @@ export function ScanDashboard({
 
       {/* The reading column: panel, strengths, and the honest footer. */}
       <div className="space-y-5">
-      <section className="plate overflow-hidden">
+      <section id="scan-panel" className="plate scroll-mt-44 overflow-hidden lg:scroll-mt-24">
         {/* 3 ── the panel: signals in the selected layer */}
         <div className="px-4 py-5 sm:px-6">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
