@@ -31,6 +31,7 @@ import {
   PANEL_ORDER,
   groupBySignal,
   panelForFinding,
+  projectedReadiness,
   readinessScore,
   type PanelId,
   type SignalGroup,
@@ -45,12 +46,6 @@ function scoreColor(score: number): string {
   return score < WEAK ? 'var(--color-signal)' : 'var(--color-ink)';
 }
 
-const BANDS = [
-  { from: 0, label: 'Unreviewed' },
-  { from: 30, label: 'Reads generated' },
-  { from: 55, label: 'Rough edges' },
-  { from: 80, label: 'Ship-shape' },
-];
 
 function FlagIcon({ className }: { className?: string }) {
   return (
@@ -63,12 +58,20 @@ function FlagIcon({ className }: { className?: string }) {
 
 // ─────────────── card 1: the verdict, then the evidence ────────────────
 
-function VerdictCard({ report }: { report: ReportCard }) {
+function VerdictCard({
+  report,
+  preview,
+}: {
+  report: ReportCard;
+  /** Projected readiness while a gauge is hovered; null when idle. */
+  preview: number | null;
+}) {
   const craft = report.craftScore;
   const exposure = report.securityScore;
   const ready = readinessScore(craft, exposure);
   const craftIsLower = craft <= exposure;
   const clamp = (v: number) => Math.min(Math.max(v, 1.5), 98.5);
+  const gain = preview !== null && preview > ready ? preview - ready : 0;
 
   return (
     <div className="px-6 pb-6 pt-5 sm:px-8">
@@ -85,74 +88,70 @@ function VerdictCard({ report }: { report: ReportCard }) {
       <div className="mt-9 flex items-center gap-5 sm:gap-7">
         <p className="shrink-0">
           <span className="display text-3xl leading-none tabular-nums text-ink">{ready}</span>
-          <span className="ml-1 font-mono text-[10px] text-ink-mute">/100</span>
+          <span className="display ml-0.5 text-lg text-ink-mute">%</span>
         </p>
 
         <div className="relative min-w-0 flex-1">
-          <div className="relative h-[3px] rounded-full bg-well">
+          {/* A progress bar, not a number line: a recessed track with a
+              solid fill. On gauge hover, a ghost segment shows how far the
+              bar advances once that layer is fixed. */}
+          <div className="relative h-2.5 rounded-full bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-ink"
+              className="absolute inset-y-0 left-0 rounded-full bg-ink transition-[width] duration-200 ease-out motion-reduce:transition-none"
               style={{ width: `${ready}%` }}
             />
-            {[30, 55, 80].map((t) => (
-              <span
-                key={t}
-                className="absolute top-1/2 h-2 w-px -translate-y-1/2 bg-[var(--line-strong)]"
-                style={{ left: `${t}%` }}
-                aria-hidden
+            {gain > 0 && (
+              <div
+                className="absolute inset-y-0 rounded-r-full bg-ink/25 transition-[width,left] duration-200 ease-out motion-reduce:transition-none"
+                style={{ left: `${ready}%`, width: `${gain}%` }}
               />
-            ))}
+            )}
 
             {/* You are here: the lower score, the only chip. */}
             <div
-              className="absolute bottom-full mb-1 -translate-x-1/2"
+              className="absolute bottom-full mb-1.5 -translate-x-1/2"
               style={{ left: `${clamp(ready)}%` }}
             >
               <div className="flex flex-col items-center">
                 <span className="mono-tight whitespace-nowrap rounded bg-ink px-1.5 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-paper">
-                  {craftIsLower ? 'Craft' : 'Exposure'} {ready}
+                  {craftIsLower ? 'Craft' : 'Exposure'} {ready}%
                 </span>
                 <span className="h-1.5 w-px bg-ink" aria-hidden />
               </div>
             </div>
 
+            {/* The projected gain, while hovering a gauge. */}
+            {gain >= 4 && preview !== null && (
+              <span
+                className="mono-tight absolute bottom-full mb-2 -translate-x-1/2 whitespace-nowrap font-mono text-[9.5px] font-semibold tabular-nums text-ink-soft"
+                style={{ left: `${clamp(preview)}%` }}
+              >
+                +{gain}%
+              </span>
+            )}
+
             {/* The other axis: a tick, not a competitor. */}
             <div
-              className="absolute top-full mt-1 -translate-x-1/2"
+              className="absolute top-full mt-1.5 -translate-x-1/2"
               style={{ left: `${clamp(craftIsLower ? exposure : craft)}%` }}
             >
               <div className="flex flex-col items-center">
                 <span className="h-1.5 w-px bg-[var(--line-strong)]" aria-hidden />
                 <span className="mono-tight whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.1em] text-ink-mute">
-                  {craftIsLower ? 'Exposure' : 'Craft'} {craftIsLower ? exposure : craft}
+                  {craftIsLower ? 'Exposure' : 'Craft'} {craftIsLower ? exposure : craft}%
                 </span>
               </div>
             </div>
 
-            <FlagIcon className="absolute -right-1 bottom-full mb-1 h-3.5 w-3.5 text-ink-mute" />
-          </div>
-
-          {/* Band scent, desktop only. */}
-          <div className="relative mt-7 hidden h-3 sm:block" aria-hidden>
-            {BANDS.map((b, i) => {
-              const next = BANDS[i + 1]?.from ?? 100;
-              return (
-                <span
-                  key={b.label}
-                  className="mono-tight absolute -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.14em] text-ink-mute"
-                  style={{ left: `${(b.from + next) / 2}%` }}
-                >
-                  {b.label}
-                </span>
-              );
-            })}
+            <FlagIcon className="absolute -right-1 bottom-full mb-1.5 h-3.5 w-3.5 text-ink-mute" />
           </div>
         </div>
       </div>
 
-      <p className="mt-4 text-[12.5px] leading-relaxed text-ink-mute sm:mt-2">
+      <p className="mt-6 text-[12.5px] leading-relaxed text-ink-mute sm:mt-4">
         Distance to production. {craftIsLower ? 'Craft' : 'Exposure'} is what holds it back —
-        the other axis sits at {craftIsLower ? exposure : craft}. Never an average.
+        the other axis sits at {craftIsLower ? exposure : craft}%. Never an average. Hover a
+        meter below to preview the gain from fixing that layer.
       </p>
     </div>
   );
@@ -160,22 +159,26 @@ function VerdictCard({ report }: { report: ReportCard }) {
 
 // ─────────────────────────────── rings ─────────────────────────────────
 
-function Ring({ score, quiet }: { score: number | null; quiet: boolean }) {
+function Gauge({ score }: { score: number | null }) {
   const R = 30;
-  const C = 2 * Math.PI * R;
+  const C = Math.PI * R; // half circle
   const value = score ?? 0;
   return (
-    <span className="relative inline-block h-[72px] w-[72px]">
-      <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90">
-        <circle cx="36" cy="36" r={R} fill="none" stroke="var(--line-strong)" strokeWidth="5" />
-        {score !== null && (
-          <circle
-            cx="36"
-            cy="36"
-            r={R}
+    <span className="relative inline-block h-[46px] w-[76px]">
+      <svg viewBox="0 0 72 42" className="h-auto w-full">
+        <path
+          d="M 6 36 A 30 30 0 0 1 66 36"
+          fill="none"
+          stroke="var(--line-strong)"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        {score !== null && value > 0 && (
+          <path
+            d="M 6 36 A 30 30 0 0 1 66 36"
             fill="none"
             stroke={scoreColor(value)}
-            strokeWidth="5"
+            strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={C}
             strokeDashoffset={C * (1 - value / 100)}
@@ -183,12 +186,16 @@ function Ring({ score, quiet }: { score: number | null; quiet: boolean }) {
         )}
       </svg>
       <span
-        className="display absolute inset-0 grid place-items-center text-[19px] tabular-nums"
+        className="display absolute inset-x-0 bottom-0 text-center text-[17px] leading-none tabular-nums"
         style={{ color: score !== null && value < WEAK ? 'var(--color-signal)' : 'var(--color-ink)' }}
       >
-        {score === null ? '—' : value}
+        {score === null ? '—' : (
+          <>
+            {value}
+            <span className="text-[10px]">%</span>
+          </>
+        )}
       </span>
-      {quiet && <span className="sr-only">clear</span>}
     </span>
   );
 }
@@ -324,16 +331,28 @@ export function ScanDashboard({
     ).id;
   });
 
+  // Hovering (or keyboard-focusing) a gauge previews the readiness gain
+  // from fixing that layer, as a ghost segment on the progress bar.
+  const [hovered, setHovered] = useState<PanelId | null>(null);
+  const ready = readinessScore(report.craftScore, report.securityScore);
+  const projectFor = (id: PanelId): number | null => {
+    if (report.insufficientSignal) return null;
+    if ((byPanel.get(id)?.length ?? 0) === 0) return null; // nothing to fix
+    return projectedReadiness(report, id);
+  };
+  const preview = hovered ? projectFor(hovered) : null;
+
   const activeMeta = PANEL_ORDER.find((p) => p.id === active)!;
   const activeFindings = byPanel.get(active) ?? [];
   const groups = groupBySignal(activeFindings);
   const capReason = active === 'exposure' ? report.securityCapReason : report.craftCapReason;
+  const activeProjected = projectFor(active);
 
   return (
     <div className="space-y-5">
       {/* 1 ── the verdict, then the readiness evidence */}
       <section className="plate overflow-visible">
-        <VerdictCard report={report} />
+        <VerdictCard report={report} preview={preview} />
       </section>
 
       {/* 2 ── the rings, and the panel they open */}
@@ -359,6 +378,10 @@ export function ScanDashboard({
                 aria-selected={isActive}
                 title={p.hint}
                 onClick={() => setActive(p.id)}
+                onMouseEnter={() => setHovered(p.id)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(p.id)}
+                onBlur={() => setHovered(null)}
                 className={`flex cursor-pointer flex-col items-center gap-1.5 border-b border-[var(--line)] px-3 pb-3.5 pt-4 transition-all focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
                   i % 2 === 0 ? 'border-r' : i % 4 === 1 ? 'sm:border-r' : ''
                 } ${isActive ? 'bg-well' : 'hover:bg-sheet'} ${
@@ -366,7 +389,7 @@ export function ScanDashboard({
                 }`}
                 style={isActive ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
               >
-                <Ring score={score} quiet={clear} />
+                <Gauge score={score} />
                 <span className="text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
                   {p.label}
                 </span>
@@ -394,7 +417,16 @@ export function ScanDashboard({
               <h2 className="text-[16px] font-semibold tracking-tight text-ink">
                 {activeMeta.label}
               </h2>
-              <p className="mt-0.5 text-[12.5px] text-ink-mute">{activeMeta.hint}.</p>
+              <p className="mt-0.5 text-[12.5px] text-ink-mute">
+                {activeMeta.hint}.
+                {activeProjected !== null && activeProjected > ready && (
+                  <span className="text-ink-soft">
+                    {' '}
+                    Fixing this layer takes distance to production from {ready}% to{' '}
+                    {activeProjected}%.
+                  </span>
+                )}
+              </p>
             </div>
             <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
               {groups.length === 0

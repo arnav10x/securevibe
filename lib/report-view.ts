@@ -128,3 +128,38 @@ export function groupBySignal<
 export function readinessScore(craftScore: number, securityScore: number): number {
   return Math.max(0, Math.min(craftScore, securityScore));
 }
+
+/**
+ * Where the readiness bar would land if every finding in one layer were
+ * fixed — the hover preview on the progress bar, and the goal-gradient
+ * sentence in the panel ("fixing this takes you from 27% to 37%").
+ *
+ * Craft recomputes from the published layer weights with the chosen layer
+ * at 100. The accessibility-floor cap stays in force unless the fixed
+ * layer IS accessibility (fixing the floor removes the cap). Fixing
+ * exposure sends that axis to 100, so readiness becomes the craft score.
+ */
+export function projectedReadiness(
+  report: {
+    craftScore: number;
+    securityScore: number;
+    craftCapReason: string | null;
+    categories: { id: string; score: number }[];
+  },
+  layer: PanelId,
+): number {
+  if (layer === 'exposure') {
+    return readinessScore(report.craftScore, 100);
+  }
+  let weighted = 0;
+  for (const l of CRAFT_LAYERS) {
+    const score =
+      l.id === layer ? 100 : (report.categories.find((c) => c.id === l.id)?.score ?? 100);
+    weighted += score * l.weight;
+  }
+  let craft = Math.round(weighted / 100);
+  if (report.craftCapReason && layer !== 'accessibility') {
+    craft = Math.min(craft, 60);
+  }
+  return readinessScore(craft, report.securityScore);
+}

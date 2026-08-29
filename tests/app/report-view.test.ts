@@ -6,6 +6,7 @@ import {
   PANEL_ORDER,
   groupBySignal,
   panelForFinding,
+  projectedReadiness,
   readinessScore,
 } from '@/lib/report-view';
 
@@ -83,5 +84,53 @@ describe('readinessScore', () => {
     expect(readinessScore(27, 76)).toBe(27);
     expect(readinessScore(90, 40)).toBe(40);
     expect(readinessScore(80, 80)).toBe(80);
+  });
+});
+
+describe('projectedReadiness (the hover preview math)', () => {
+  const report = {
+    craftScore: 27,
+    securityScore: 76,
+    craftCapReason: null,
+    categories: [
+      { id: 'tokens', score: 15 },
+      { id: 'states', score: 0 },
+      { id: 'typography', score: 70 },
+      { id: 'motion', score: 86 },
+      { id: 'layout', score: 18 },
+      { id: 'copy', score: 0 },
+      { id: 'accessibility', score: 0 },
+    ],
+  };
+
+  it('recomputes craft with the fixed layer at 100, on the published weights', () => {
+    // Fixing copy (weight 10, score 0) adds 10 weighted points.
+    const base = projectedReadiness(report, 'copy');
+    const weighted =
+      15 * 22 + 0 * 20 + 70 * 15 + 86 * 13 + 18 * 12 + 100 * 10 + 0 * 8;
+    expect(base).toBe(Math.min(Math.round(weighted / 100), 76));
+  });
+
+  it('fixing exposure moves readiness to the craft score', () => {
+    expect(projectedReadiness(report, 'exposure')).toBe(27);
+    expect(projectedReadiness({ ...report, craftScore: 90, securityScore: 40 }, 'exposure')).toBe(90);
+  });
+
+  it('keeps the accessibility-floor cap unless accessibility is the layer fixed', () => {
+    const capped = {
+      ...report,
+      craftScore: 60,
+      craftCapReason: 'Capped at 60: focus outline removed.',
+      categories: report.categories.map((c) => ({ ...c, score: c.id === 'accessibility' ? 0 : 90 })),
+    };
+    // Fixing a non-a11y layer cannot lift the cap.
+    expect(projectedReadiness(capped, 'copy')).toBeLessThanOrEqual(60);
+    // Fixing accessibility lifts it.
+    expect(projectedReadiness(capped, 'accessibility')).toBeGreaterThan(60);
+  });
+
+  it('never exceeds the other axis', () => {
+    const held = { ...report, securityScore: 30 };
+    expect(projectedReadiness(held, 'tokens')).toBeLessThanOrEqual(30);
   });
 });
