@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { ButtonLink } from '@/components/ui';
 import { Magnetic, Reveal, ScrollRail } from '@/components/fx';
-import { Guilloche } from '@/components/guilloche';
+import { GuillocheField } from '@/components/guilloche';
 import { BrandBelt } from '@/components/brand-logos';
 import { DeletionRig } from '@/components/deletion-rig';
 import { ScanConsole } from '@/components/scan-console';
@@ -203,15 +203,13 @@ export default function LandingPage() {
 
         <div className="relative mx-auto w-full max-w-6xl px-4 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-24">
           {/* The engraved rosette, turning whole in the open right half */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-10 top-1/2 hidden h-[540px] w-[540px] -translate-y-1/2 md:block xl:right-0"
-            style={{
-              maskImage: 'radial-gradient(closest-side, black 66%, transparent 100%)',
-            }}
-          >
-            <Guilloche parallax opacity={0.85} />
-          </div>
+          <GuillocheField
+            size={540}
+            fade={[66, 100]}
+            opacity={0.85}
+            parallax
+            className="-right-10 top-1/2 hidden -translate-y-1/2 md:block xl:right-0"
+          />
           <div className="max-w-3xl">
             <Reveal>
               <p className="label">Design audit · for AI-built products</p>
@@ -475,13 +473,12 @@ export default function LandingPage() {
         <div aria-hidden className="hazard-rule" />
         <div className="relative overflow-hidden bg-ultra py-20 text-bone">
           {/* Engraving turning behind the promise */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -left-64 top-1/2 hidden h-[720px] w-[720px] -translate-y-1/2 lg:block"
-            style={{ maskImage: 'radial-gradient(closest-side, black 55%, transparent 98%)' }}
-          >
-            <Guilloche opacity={0.3} />
-          </div>
+          <GuillocheField
+            size={720}
+            fade={[55, 98]}
+            opacity={0.3}
+            className="-left-64 top-1/2 hidden -translate-y-1/2 lg:block"
+          />
           <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
             <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
               <div>
@@ -657,13 +654,12 @@ export default function LandingPage() {
 
       {/* ================= Final CTA ================= */}
       <section className="relative overflow-hidden py-24">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2"
-          style={{ maskImage: 'radial-gradient(closest-side, black 45%, transparent 95%)' }}
-        >
-          <Guilloche opacity={0.35} />
-        </div>
+        <GuillocheField
+          size={560}
+          fade={[45, 95]}
+          opacity={0.35}
+          className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        />
         <div className="relative mx-auto max-w-3xl px-4 text-center sm:px-6">
           <Reveal>
             <div className="mx-auto mb-8 w-fit">

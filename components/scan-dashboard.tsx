@@ -40,7 +40,7 @@ import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
 import { fixPrompt, SEVERITY_COLOR, type FindingView } from '@/components/findings';
 import { buildSectionPrompt } from '@/lib/scanner/section-prompt';
-import { Guilloche } from '@/components/guilloche';
+import { GuillocheField } from '@/components/guilloche';
 
 /** Red means "needs fixing" and nothing else. */
 const WEAK = 63;
@@ -95,13 +95,12 @@ function VerdictCard({
     <div className="relative overflow-hidden px-6 pb-5 pt-4 sm:px-8">
       {/* The house engraving, faint, behind the verdict — the one branded
           surface in the app. Masked so it never competes with the text. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-24 -top-24 hidden h-[360px] w-[360px] opacity-[0.3] sm:block"
-        style={{ maskImage: 'radial-gradient(closest-side, black 40%, transparent 95%)' }}
-      >
-        <Guilloche />
-      </div>
+      <GuillocheField
+        size={360}
+        fade={[40, 95]}
+        opacity={0.3}
+        className="-right-24 -top-24 hidden sm:block"
+      />
 
       <div className="relative">
       <p className="label">Verdict</p>

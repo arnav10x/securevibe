@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Guilloche } from '@/components/guilloche';
+import { GuillocheField } from '@/components/guilloche';
 import { Logo } from '@/components/icons';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
@@ -9,15 +9,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="relative flex flex-1 flex-col items-center justify-center px-4 py-12">
         {/* The rose blooms in behind the card on first paint, then keeps
             turning — the same engraving that opens the landing page. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[680px] w-[680px] -translate-x-1/2 -translate-y-1/2"
-          style={{ maskImage: 'radial-gradient(closest-side, black 55%, transparent 98%)' }}
-        >
-          <div className="rose-enter h-full w-full">
-            <Guilloche opacity={0.5} />
-          </div>
-        </div>
+        <GuillocheField
+          size={680}
+          fade={[55, 98]}
+          opacity={0.5}
+          enter
+          className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        />
         <Link href="/" className="relative mb-8" aria-label="SecureVibe home">
           <Logo />
         </Link>

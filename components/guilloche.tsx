@@ -186,3 +186,54 @@ export function Guilloche({
     />
   );
 }
+
+// The rosette never outgrows the screen it is drawn on: below this width
+// it scales with the viewport, above it holds the size its placement was
+// drawn for. A rosette wider than the window masks down to a stray arc,
+// which is the one thing this ornament must never look like.
+const ROSE_VW = 92;
+const ROSE_MIN = 240;
+
+/**
+ * A guilloché rosette placed as decoration behind a section.
+ *
+ * Call sites give the ceiling (`size`) and where the engraving fades
+ * (`fade`); this owns the sizing rule, the mask and the a11y attributes so
+ * there is one place to change how the rose sits, not five. Height is tied
+ * to width rather than set — the canvas inscribes its circle in the box, so
+ * "square" is a relationship, not a second number to keep in sync.
+ */
+export function GuillocheField({
+  size,
+  fade,
+  className = '',
+  opacity,
+  parallax,
+  enter,
+}: {
+  /** Ceiling for the square, in px — its size once the screen is wide enough. */
+  size: number;
+  /** Mask stops as percentages: [where the ink starts fading, where it is gone]. */
+  fade: [number, number];
+  /** Placement: insets, translations, and any breakpoint visibility. */
+  className?: string;
+  opacity?: number;
+  parallax?: boolean;
+  /** Bloom the engraving in on first paint. */
+  enter?: boolean;
+}) {
+  const rose = <Guilloche opacity={opacity} parallax={parallax} />;
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none absolute ${className}`}
+      style={{
+        width: `clamp(${ROSE_MIN}px, ${ROSE_VW}vw, ${size}px)`,
+        aspectRatio: '1',
+        maskImage: `radial-gradient(closest-side, black ${fade[0]}%, transparent ${fade[1]}%)`,
+      }}
+    >
+      {enter ? <div className="rose-enter h-full w-full">{rose}</div> : rose}
+    </div>
+  );
+}
