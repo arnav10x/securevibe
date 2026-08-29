@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { Alert, Button, Card, Input, Label } from '@/components/ui';
 import { IconMail } from '@/components/icons';
 
@@ -17,12 +18,14 @@ export default function ForgotPasswordPage() {
     setError(null);
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    });
+    const { error } = await supabase.auth
+      .resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      })
+      .catch((e: unknown) => ({ error: e as { message: string } }));
     setLoading(false);
     if (error) {
-      setError(error.message);
+      setError(authErrorMessage(error.message));
       return;
     }
     setSent(true);

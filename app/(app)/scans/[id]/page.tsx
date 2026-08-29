@@ -1,7 +1,7 @@
-// The scan report page: an inspection report. The letterhead carries the
-// "source destroyed" stamp (the product's trust moment), the report card
-// carries the grade, and the findings browser turns the list into a
-// severity-tabbed triage queue.
+// The scan report page: an instrument panel, not a scroll. The letterhead
+// carries the "source destroyed" stamp (the product's trust moment); the
+// dashboard puts the distance-to-production meter, the eight rings, and
+// the per-layer signal panel on one screen.
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -11,7 +11,7 @@ import { Alert, Card } from '@/components/ui';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { toFindingView } from '@/components/findings';
 import { FindingsBrowser } from '@/components/findings-browser';
-import { ReportCardPlate } from '@/components/report-card';
+import { ScanDashboard } from '@/components/scan-dashboard';
 import { StampIn } from '@/components/fx';
 import {
   IconArchive,
@@ -29,7 +29,7 @@ const CHECK_LABELS: Record<string, string> = {
   platform_config: 'Config',
   dependency: 'Deps',
   insecure_pattern: 'Code',
-  design: 'Design',
+  design: 'Craft',
 };
 
 interface Finding {
@@ -43,6 +43,7 @@ interface Finding {
   evidence_masked: string | null;
   recommendation: string;
   confidence?: string;
+  rule_id?: string | null;
 }
 
 export default async function ScanPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,17 +59,19 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
 
   const { data: findings } = await supabase
     .from('findings')
-    .select('id, check_type, severity, confidence, title, explanation, file_path, line_start, evidence_masked, recommendation')
+    .select('id, check_type, severity, confidence, rule_id, title, explanation, file_path, line_start, evidence_masked, recommendation')
     .eq('scan_id', id);
 
-  // One list, worst first; security findings ahead of design within a
-  // severity. The browser tabs and numbers everything from this order.
+  // One list, worst first; CRAFT findings lead within a severity band.
+  // Craft is what this product is for, and the first finding a reader
+  // recognizes as true is what decides whether they believe the rest.
+  // The browser tabs and numbers everything from this order.
   const all = (findings ?? []) as Finding[];
   const browserFindings = all
     .sort((a, b) => {
-      const aDesign = a.check_type === 'design' ? 1 : 0;
-      const bDesign = b.check_type === 'design' ? 1 : 0;
-      if (aDesign !== bDesign) return aDesign - bDesign;
+      const aCraft = a.check_type === 'design' ? 0 : 1;
+      const bCraft = b.check_type === 'design' ? 0 : 1;
+      if (aCraft !== bCraft) return aCraft - bCraft;
       return (a.file_path ?? '').localeCompare(b.file_path ?? '');
     })
     .map((f) => ({
@@ -84,6 +87,17 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
     report?: ReportCard;
   };
   const inFlight = scan.status === 'queued' || scan.status === 'running';
+
+  // Scans graded before the seven-layer engine store a report the dashboard
+  // cannot faithfully render (different categories, no craft score). They
+  // keep the plain findings list plus a rescan nudge instead of a meter
+  // full of dashes.
+  const report = stats.report;
+  const modernReport =
+    !!report &&
+    typeof report.craftScore === 'number' &&
+    typeof report.verdict === 'string' &&
+    Array.isArray(report.categories);
 
   return (
     <div>
@@ -103,7 +117,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
       <div className="plate relative px-5 py-5 sm:px-7 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="label">Security inspection report</p>
+            <p className="label">Craft &amp; exposure report</p>
             <h1 className="mt-3 flex min-w-0 items-center gap-2.5">
               <span className="shrink-0 text-ink-mute">
                 {scan.source_type === 'github' ? (
@@ -175,39 +189,56 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           </Alert>
         )}
 
-        {scan.status === 'completed' && stats.report && (
-          <ReportCardPlate report={stats.report} />
+        {scan.status === 'completed' && modernReport && (
+          <ScanDashboard report={report} findings={browserFindings} />
+        )}
+
+        {scan.status === 'completed' && !modernReport && all.length > 0 && (
+          <Alert tone="info">
+            This scan predates the current report. The findings below are still
+            valid — rescan the repo to get the full dashboard with craft layers
+            and the distance-to-production meter.
+          </Alert>
         )}
 
         {/* Legacy scans with no report card still get an honest clean note. */}
-        {scan.status === 'completed' && !stats.report && all.length === 0 && (
+        {scan.status === 'completed' && !modernReport && all.length === 0 && (
           <Card className="py-14 text-center">
             <StampIn>
               <span className="tag tag--safe text-base">Clear · no findings</span>
             </StampIn>
             <p className="prose-serif mx-auto mt-6 max-w-lg text-[15px] text-ink-soft">
-              None of our checks (secrets, platform configuration, dependencies, insecure
-              patterns, design tells) flagged anything. Remember: automated checks can&apos;t
-              prove an app is secure — this is a good sign, not a guarantee.
+              Nothing flagged across the seven craft layers or the exposure checks. That is
+              a good sign, not a guarantee: a static scan cannot see your running app, and it
+              cannot judge what a page looks like once it renders.
             </p>
           </Card>
         )}
 
+        {scan.status === 'completed' && (stats.notes ?? []).length > 0 && (
+          <details className="px-1">
+            <summary className="mono-tight cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute hover:text-ink">
+              Scan notes ({(stats.notes ?? []).length})
+            </summary>
+            <div className="mt-3 space-y-2">
+              {(stats.notes ?? []).map((note) => (
+                <Alert key={note} tone="info">
+                  {note}
+                </Alert>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {/* Legacy scans that predate the dashboard: the old severity queue */}
+        {scan.status === 'completed' && !modernReport && all.length > 0 && (
+          <FindingsBrowser findings={browserFindings} />
+        )}
+
         {scan.status === 'completed' && all.length > 0 && (
-          <>
-            {(stats.notes ?? []).map((note) => (
-              <Alert key={note} tone="info">
-                {note}
-              </Alert>
-            ))}
-
-            {/* Severity tabs + accordion list — the whole report, one queue */}
-            <FindingsBrowser findings={browserFindings} />
-
-            <p className="rule-hair pt-5 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-ink-mute">
-              End of report ∎
-            </p>
-          </>
+          <p className="rule-hair pt-5 text-center font-mono text-[10px] uppercase tracking-[0.24em] text-ink-mute">
+            End of report ∎
+          </p>
         )}
       </div>
     </div>

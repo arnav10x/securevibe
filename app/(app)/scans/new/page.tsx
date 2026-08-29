@@ -144,7 +144,7 @@ export default function NewScanPage() {
               type="button"
               onClick={() => setTab(value)}
               aria-pressed={tab === value}
-              className={`flex cursor-pointer items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              className={`flex cursor-pointer items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
                 tab === value
                   ? 'border border-ink/70 bg-sheet text-ink shadow-[0_1px_2px_rgba(17,26,68,0.10)]'
                   : 'border border-transparent text-ink-mute hover:text-ink-soft'

@@ -46,6 +46,67 @@ export function looksLikePlaceholder(value: string): boolean {
   );
 }
 
+/**
+ * True for a value that reads as a documentation example rather than a real
+ * credential: it contains runs of the alphabet or of digits in order
+ * ("abc123def456"). Real keys are random, so two or more such runs in one
+ * value effectively never happen by chance.
+ *
+ * This is deliberately narrow. It is only ever consulted together with
+ * `isCommentLine`, because a genuine key pasted into a comment is still a
+ * genuine leak and must keep firing.
+ */
+export function looksLikeDocExample(value: string): boolean {
+  const runs = value
+    .toLowerCase()
+    .match(/abc|bcd|cde|def|efg|ghi|hij|ijk|xyz|012|123|234|345|456|567|678|789/g);
+  return (runs?.length ?? 0) >= 2;
+}
+
+/** True when the line is a comment (line, block, or doc-block continuation). */
+export function isCommentLine(line: string): boolean {
+  const t = line.trimStart();
+  return t.startsWith('//') || t.startsWith('#') || t.startsWith('*') || t.startsWith('/*');
+}
+
+/**
+ * True when the line DEFINES a pattern rather than running dangerous code:
+ * a regex assigned to a `regex:`/`pattern:` property, or a `new RegExp(...)`.
+ *
+ * Without this the scanner reports its own rule definitions as
+ * vulnerabilities, and it does the same to anyone else's linter config or
+ * WAF rule list. A rule that says "eval( is dangerous" is not an eval call.
+ */
+export function isPatternDefinitionLine(line: string): boolean {
+  return (
+    /^\s*(?:regex|pattern|re|rx|matcher)\s*:\s*\//.test(line) ||
+    /\bnew RegExp\s*\(/.test(line) ||
+    /^\s*\/(?!\/)/.test(line) // a bare regex literal opening the line
+  );
+}
+
+/**
+ * True when a match at `index` falls inside a quoted string that reads as
+ * prose (four or more words). Such a match is the pattern being DESCRIBED,
+ * not executed: a rule titled "new Function() builds code from strings", an
+ * error message, or documentation showing the safe alternative.
+ *
+ * Dangerous code puts the call outside the quotes (`exec('rm ' + x)` matches
+ * at `exec(`), so this never suppresses a real finding.
+ */
+export function matchIsInsideProseString(line: string, index: number): boolean {
+  const stringLiteral = /(['"`])(?:\\.|(?!\1)[^\\])*\1/g;
+  let m: RegExpExecArray | null;
+  while ((m = stringLiteral.exec(line)) !== null) {
+    const start = m.index;
+    const end = m.index + m[0].length;
+    if (index <= start || index >= end) continue;
+    const words = m[0].slice(1, -1).trim().split(/\s+/).filter(Boolean);
+    return words.length >= 4;
+  }
+  return false;
+}
+
 /** True if the buffer looks binary (contains a NUL byte in its first 8KB). */
 export function looksBinary(buffer: Buffer): boolean {
   const slice = buffer.subarray(0, 8192);

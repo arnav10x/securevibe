@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { Alert, Button, Card, Input, Label } from '@/components/ui';
 
 function LoginForm() {
@@ -22,16 +23,15 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // signInWithPassword rejects (rather than returning an error) when the
+    // network call itself fails, so catch that too — otherwise an
+    // unreachable server surfaces as an unhandled rejection.
+    const { error } = await supabase.auth
+      .signInWithPassword({ email, password })
+      .catch((e: unknown) => ({ error: e as { message: string } }));
     setLoading(false);
     if (error) {
-      setError(
-        error.message === 'Invalid login credentials'
-          ? 'Wrong email or password.'
-          : error.message === 'Email not confirmed'
-            ? 'Please confirm your email first — check your inbox for our verification link.'
-            : error.message,
-      );
+      setError(authErrorMessage(error.message));
       return;
     }
     router.push(searchParams.get('next') ?? '/dashboard');
@@ -41,7 +41,7 @@ function LoginForm() {
   return (
     <Card>
       <h1 className="mb-1 display text-2xl text-ink">Welcome back</h1>
-      <p className="mb-6 text-sm text-ink-soft">Sign in to run your security scans.</p>
+      <p className="mb-6 text-sm text-ink-soft">Sign in to run your scans.</p>
 
       {notice && (
         <div className="mb-4">

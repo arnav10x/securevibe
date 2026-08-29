@@ -59,7 +59,7 @@ export interface ScanStats {
   packageLookupFailures: number;
   /** Human-readable notes, e.g. "scan stopped early: file limit reached" */
   notes: string[];
-  /** The graded report card (security + design), when the scan produced one. */
+  /** The graded report card (craft + exposure), when the scan produced one. */
   report?: ReportCard;
 }
 
@@ -79,11 +79,11 @@ export interface DesignCategoryScore {
  *
  * Security and Craft are two INDEPENDENT grades. We never blend them: a
  * security tool must not hide a leaked key behind good typography, and it
- * must not punish a secure app for looking template-y. The Security grade is
- * the headline; Craft is secondary.
+ * must not punish a secure app for looking template-y. Craft is the headline
+ * (it is the wedge); exposure is table stakes and a credibility anchor.
  */
 export interface ReportCard {
-  // ── Security (the headline) ─────────────────────────────────────────
+  // ── Exposure (table stakes, and the credibility anchor) ─────────────
   /** Security letter grade, e.g. "F". "—" when there was too little to grade. */
   securityGrade: string;
   /** 0–100 security score behind the grade. */
@@ -95,8 +95,15 @@ export interface ReportCard {
    * of how clean everything else is.
    */
   securityCapReason: string | null;
-  /** Count of security findings by severity, for the at-a-glance strip. */
+  /**
+   * Count of security findings by severity, for the at-a-glance strip.
+   * SHIPPED code only — findings in test and fixture files are counted in
+   * testOnlyCount instead, because planted test credentials are the fixture
+   * working as intended, not an exploitable leak.
+   */
   tally: Record<Severity, number>;
+  /** Security findings that live in test or fixture files. Reported apart. */
+  testOnlyCount: number;
   /** True when code was scanned and zero security findings were filed. */
   clean: boolean;
   /**
@@ -107,7 +114,7 @@ export interface ReportCard {
   /** Honest, plain-English list of what a source scan cannot see. */
   limitations: string[];
 
-  // ── Craft (secondary — how much judgment shows after generation) ─────
+  // ── Craft (the headline — how much judgment shows after generation) ──
   /** Craft letter grade. */
   craftGrade: string;
   /** 0–100 craft score. */

@@ -25,6 +25,10 @@ export interface FindingView {
   explanation: string;
   recommendation: string;
   confidence?: string;
+  /** The rule that filed it — the dashboard groups findings by this. */
+  ruleId?: string | null;
+  /** Which of the checks filed it (design, secret, dependency...). */
+  checkType?: string;
 }
 
 /** How sure we are, in words the reader can weigh. */
@@ -69,7 +73,11 @@ export function FindingAccordion({
   typeLabel?: string;
 }) {
   const color = SEVERITY_COLOR[f.severity] ?? SEVERITY_COLOR.low;
-  const fileShort = f.filePath?.split('/').pop() ?? null;
+  // Show the parent directory too. A bare basename hides where the finding
+  // lives, so "tests/fixtures/.env" reads as a committed ".env" at the root.
+  const fileShort = f.filePath
+    ? f.filePath.split('/').slice(-2).join('/')
+    : null;
 
   return (
     <details
@@ -82,7 +90,7 @@ export function FindingAccordion({
         <span className="shrink-0">
           <SeverityBadge severity={f.severity} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-ink">
+        <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug tracking-tight text-ink line-clamp-1">
           {f.title}
         </span>
         {f.confidence && CONFIDENCE_LABEL[f.confidence] && (
@@ -122,7 +130,7 @@ export function FindingAccordion({
           </p>
         )}
         {f.evidenceMasked && (
-          <pre className="readout mt-3 overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-ink-soft">
+          <pre className="readout mt-3 w-0 min-w-full overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-ink-soft">
             {f.evidenceMasked}
           </pre>
         )}
@@ -146,7 +154,7 @@ export function FindingAccordion({
           <summary className="mono-tight cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-mute hover:text-ink">
             Fix prompt — paste into Cursor / Lovable / Claude
           </summary>
-          <pre className="readout mt-2.5 overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-soft">
+          <pre className="readout mt-2.5 w-0 min-w-full overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-soft">
             {fixPrompt(f)}
           </pre>
         </details>
@@ -166,6 +174,8 @@ export function toFindingView(row: {
   line_start: number | null;
   evidence_masked: string | null;
   confidence?: string;
+  rule_id?: string | null;
+  check_type?: string;
 }): FindingView {
   return {
     id: row.id,
@@ -177,5 +187,7 @@ export function toFindingView(row: {
     explanation: row.explanation,
     recommendation: row.recommendation,
     confidence: row.confidence,
+    ruleId: row.rule_id ?? null,
+    checkType: row.check_type,
   };
 }

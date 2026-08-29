@@ -23,6 +23,7 @@
 
 import path from 'node:path';
 import type { Confidence, Finding, Severity } from '../types';
+import { isPatternDefinitionLine, matchIsInsideProseString } from '../util';
 import {
   CRAFT_LAYERS,
   CSS,
@@ -167,6 +168,17 @@ export class DesignAnalyzer {
 
   // ── copy samples for the optional model-assisted pass ──
   private copySamples: string[] = [];
+
+  /** Every bracketed font size seen, with how often. Drives the scale check. */
+  private bracketSizeCounts = new Map<string, number>();
+
+  /**
+   * Class names the project's own CSS defines as uppercase tracked labels.
+   * A design system usually names this style once in CSS rather than
+   * repeating utilities, and a rule that only reads inline utilities would
+   * call every use of it unreadable body text.
+   */
+  private labelClasses = new Set<string>();
 
   addFile(relPath: string, content: string): void {
     // Test files and fixtures are not shipped UI — planted junk in a test
@@ -416,6 +428,13 @@ export class DesignAnalyzer {
       this.arbitrarySpacingExample ??= `${m[0]} in ${relPath}`;
     }
 
+    // A size repeated across the project is a scale step, whatever the
+    // framework's defaults are. A size used once or twice is the one-off the
+    // rule is looking for. finish() drops the findings for repeated values.
+    for (const m of content.matchAll(/\btext-\[(\d+)px\]/g)) {
+      this.bracketSizeCounts.set(m[1], (this.bracketSizeCounts.get(m[1]) ?? 0) + 1);
+    }
+
     for (const m of content.matchAll(/\brounded(?:-[a-z0-9]+)*/g)) {
       // Normalize rounded-tl-lg → lg, bare rounded → base; ignore full/none.
       const parts = m[0].split('-').slice(1);
@@ -510,6 +529,14 @@ export class DesignAnalyzer {
       this.tokenNames.add(m[1]);
     }
 
+    // Collect label styles: a class that sets uppercase AND letter-spacing is
+    // this project's micro-label, whatever it is called.
+    for (const m of content.matchAll(/\.([\w-]+)[^{}]*\{([^}]*)\}/g)) {
+      if (/text-transform\s*:\s*uppercase/i.test(m[2]) && /letter-spacing\s*:/i.test(m[2])) {
+        this.labelClasses.add(m[1]);
+      }
+    }
+
     for (const m of content.matchAll(/font-family\s*:\s*([^;}]+)/gi)) {
       const first = m[1].split(',')[0]?.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
       if (first && !first.startsWith('var(') && !GENERIC_FONTS.has(first)) {
@@ -557,7 +584,16 @@ export class DesignAnalyzer {
       this.fontFamilies.add('(local font)');
     }
     this.consoleLogCount += content.match(/\bconsole\.log\(/g)?.length ?? 0;
-    this.todoCount += content.match(/\b(?:TODO|FIXME|HACK)\b/g)?.length ?? 0;
+    // Count real markers only. The word inside a rule definition or a prose
+    // string is the marker being described, not a piece of unfinished work —
+    // without this the scanner counts its own TODO-detection rule.
+    for (const line of content.split('\n')) {
+      if (isPatternDefinitionLine(line)) continue;
+      const m = /\b(?:TODO|FIXME|HACK)\b/.exec(line);
+      if (!m) continue;
+      if (matchIsInsideProseString(line, m.index)) continue;
+      this.todoCount++;
+    }
   }
 
   /**
@@ -659,8 +695,67 @@ export class DesignAnalyzer {
 
   // ── aggregate findings ───────────────────────────────────────────────
 
+  /** A size used this often across the project counts as a scale step. */
+  private static readonly SCALE_STEP_THRESHOLD = 5;
+
+  /**
+   * Drop off-scale findings for sizes the project uses systematically. Three
+   * files at 15px is a decision; one file at 15px among a scatter is not.
+   */
+  private pruneSystematicSizes(): void {
+    const systematic = new Set(
+      [...this.bracketSizeCounts.entries()]
+        .filter(([, n]) => n >= DesignAnalyzer.SCALE_STEP_THRESHOLD)
+        .map(([size]) => size),
+    );
+    if (systematic.size === 0) return;
+
+    const isSystematic = (f: Finding) => {
+      const m = /text-\[(\d+)px\]/.exec(f.evidenceMasked ?? '');
+      return m !== null && systematic.has(m[1]);
+    };
+    const before = this.findings.length;
+    this.findings = this.findings.filter(
+      (f) => f.ruleId !== 'type-offscale-size' || !isSystematic(f),
+    );
+
+    const removed = before - this.findings.length;
+    const hit = this.hits.get('type-offscale-size');
+    if (hit) {
+      hit.count -= removed;
+      if (hit.count <= 0) this.hits.delete('type-offscale-size');
+    }
+  }
+
+  /**
+   * Drop legibility findings on 10px and 11px text that carries one of the
+   * project's own label classes. Those resolve to uppercase tracked capitals,
+   * which read larger than the nominal size.
+   */
+  private pruneCssLabelSizes(): void {
+    if (this.labelClasses.size === 0) return;
+    const before = this.findings.length;
+    this.findings = this.findings.filter((f) => {
+      if (f.ruleId !== 'type-below-floor') return true;
+      const evidence = f.evidenceMasked ?? '';
+      if (!/text-\[1[01]px\]/.test(evidence)) return true;
+      return ![...this.labelClasses].some((c) =>
+        new RegExp(`(?:^|["'\\s])${c}(?:["'\\s]|$)`).test(evidence),
+      );
+    });
+
+    const removed = before - this.findings.length;
+    const hit = this.hits.get('type-below-floor');
+    if (hit) {
+      hit.count -= removed;
+      if (hit.count <= 0) this.hits.delete('type-below-floor');
+    }
+  }
+
   finish(): DesignAudit {
     this.emitAggregates();
+    this.pruneSystematicSizes();
+    this.pruneCssLabelSizes();
 
     let vibe = 0;
     const layerHits: LayerHit[] = [];

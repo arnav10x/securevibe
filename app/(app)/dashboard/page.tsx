@@ -188,7 +188,7 @@ export default async function DashboardPage() {
                   {Array.from({ length: FREE_SCANS_PER_MONTH }, (_, i) => (
                     <span
                       key={i}
-                      className={`h-3 w-4 rounded-sm border border-ink/60 ${
+                      className={`h-3 w-4 rounded border border-ink/60 ${
                         i < used ? 'bg-ink' : 'bg-sheet'
                       }`}
                     />
@@ -278,7 +278,7 @@ export default async function DashboardPage() {
           <h2 className="display mt-6 text-2xl">No scans on record</h2>
           <p className="prose-serif mx-auto mt-3 max-w-md text-[15px] text-ink-soft">
             Point SecureVibe at a public GitHub repo or upload a zip of your project, and get a
-            plain-English security report in about a minute.
+            plain-English craft and exposure report in about a minute.
           </p>
           <div className="mt-6 flex justify-center">
             <ButtonLink href="/scans/new">Run your first scan</ButtonLink>
@@ -298,7 +298,7 @@ export default async function DashboardPage() {
                       className="group block px-4 py-4 transition-colors duration-150 hover:bg-paper sm:px-5"
                     >
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <span className="mono-tight w-8 shrink-0 font-mono text-[11px] text-ink-mute tabular-nums">
+                        <span className="mono-tight w-8 shrink-0 font-mono text-xs text-ink-mute tabular-nums">
                           {String((scans ?? []).length - idx).padStart(2, '0')}
                         </span>
                         <span className="flex min-w-0 items-center gap-2.5 font-medium">
@@ -312,7 +312,7 @@ export default async function DashboardPage() {
                           <span className="truncate">{scan.source_ref}</span>
                         </span>
                         <StatusChip status={scan.status} />
-                        <span className="mono-tight ml-auto flex items-center gap-2 font-mono text-[11px] text-ink-mute">
+                        <span className="mono-tight ml-auto flex items-center gap-2 font-mono text-xs text-ink-mute">
                           {new Date(scan.created_at).toLocaleString()}
                           <IconArrowUpRight className="h-3.5 w-3.5 text-verdant-ink opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
                         </span>
@@ -353,7 +353,7 @@ export default async function DashboardPage() {
           <ol className="mt-4 space-y-3.5">
             {DRILL.map(([habit, why], i) => (
               <li key={habit} className="flex gap-3 text-sm leading-relaxed">
-                <span className="mono-tight mt-0.5 shrink-0 font-mono text-[11px] font-semibold tabular-nums text-ink-mute">
+                <span className="mono-tight mt-0.5 shrink-0 font-mono text-xs font-semibold tabular-nums text-ink-mute">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span>

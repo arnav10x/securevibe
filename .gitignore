@@ -50,3 +50,6 @@ next-env.d.ts
 .agents/
 .claude/skills/
 skills-lock.json
+
+# Local Claude Code settings may contain machine-specific values
+.claude/settings.local.json

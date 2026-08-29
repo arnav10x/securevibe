@@ -1,9 +1,18 @@
-// The report card. Two INDEPENDENT grades: Security is the headline (a
-// security tool must not hide a leaked key behind good typography), Craft is
-// secondary. When a proven serious finding holds the grade down, we say so —
-// SSL-Labs style — because "capped at F because a live key is committed" is
-// more useful and more shareable than "you lost 37 points". A scan with
-// nothing to look at reads "not enough to grade", never a free A+.
+// The report card. Two INDEPENDENT scores, never blended, under one plain
+// verdict sentence.
+//
+//   Craft is the headline. Security scanning is a crowded category with
+//   well-funded incumbents; judgment in the interface layer is not. This is
+//   the number the product exists to produce.
+//
+//   Exposure is table stakes and a credibility anchor. It stays visible and
+//   it never averages into craft: good typography must not hide a leaked
+//   key, and a secure app must not be marked up for being safe and dull.
+//
+// When a proven finding holds a grade down we say so — SSL-Labs style —
+// because "capped because a live key is committed" is more useful and more
+// shareable than "you lost 37 points". A scan with nothing to look at reads
+// "not enough to grade", never a free A+.
 //
 // Pure render — everything shown is derived server-side by the scanner and
 // stored in scans.stats.report.
@@ -18,30 +27,12 @@ function gradeColor(grade: string): string {
   return 'var(--color-ink)';
 }
 
-const SEVERITY_COLOR: Record<Severity, string> = {
-  critical: 'var(--color-critical)',
-  high: 'var(--color-high)',
-  medium: 'var(--color-medium)',
-  low: 'var(--color-low)',
-};
-
-function ScoreCell({ label, value, suffix = '/100' }: { label: string; value: number | string; suffix?: string }) {
-  return (
-    <div className="px-5 py-1">
-      <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
-        {label}
-      </p>
-      <p className="mt-1 flex items-baseline gap-1">
-        <span className="display text-3xl tabular-nums text-ink">{value}</span>
-        <span className="font-mono text-[10px] text-ink-mute">{suffix}</span>
-      </p>
-    </div>
-  );
-}
 
 export function ReportCardPlate({ report }: { report: ReportCard }) {
   const severities: Severity[] = ['critical', 'high', 'medium', 'low'];
   const hasFindings = severities.some((s) => report.tally[s] > 0);
+  const noCraftSignal = report.insufficientSignal;
+  const worstLayer = report.categories[0];
 
   return (
     <div className="plate overflow-hidden">
@@ -55,56 +46,34 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
         </div>
       )}
       <div className="flex flex-wrap items-stretch">
-        {/* The Security grade — the headline of the whole report */}
+        {/* CRAFT is the headline. Anyone can run a security scanner; the
+            question this product exists to answer is whether the interface
+            reads as built by someone with judgment. */}
         <div className="flex items-center gap-5 border-r border-[var(--line)] px-6 py-5 sm:px-8">
           <span
             className="display text-7xl leading-none tracking-tight"
-            style={{ color: gradeColor(report.securityGrade) }}
+            style={{ color: gradeColor(report.craftGrade) }}
           >
-            {report.securityGrade}
+            {noCraftSignal ? '—' : report.craftGrade}
           </span>
           <div>
-            <p className="label">Security grade</p>
+            <p className="label">Craft grade</p>
             <p className="mono-tight mt-1.5 font-mono text-[11px] tabular-nums text-ink-soft">
-              {report.insufficientSignal ? 'not enough to grade' : `${report.securityScore}/100`}
+              {noCraftSignal ? 'not enough to grade' : `${report.craftScore}/100`}
             </p>
+            {!noCraftSignal && worstLayer && (
+              <p className="mt-1 text-[12px] leading-snug text-ink-mute">
+                Weakest: {worstLayer.label.toLowerCase()}
+              </p>
+            )}
           </div>
         </div>
 
         <div className="flex flex-1 flex-wrap items-center divide-x divide-[var(--line)] py-4">
-          {/* At-a-glance severity tally */}
-          <div className="px-5 py-1">
+          {/* How generated it reads — the number this product is really for */}
+          <div className="min-w-44 flex-1 px-5 py-1">
             <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
-              Findings
-            </p>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              {hasFindings ? (
-                severities
-                  .filter((s) => report.tally[s] > 0)
-                  .map((s) => (
-                    <span key={s} className="flex items-baseline gap-1">
-                      <span
-                        className="display text-xl tabular-nums"
-                        style={{ color: SEVERITY_COLOR[s] }}
-                      >
-                        {report.tally[s]}
-                      </span>
-                      <span className="font-mono text-[10px] uppercase tracking-wide text-ink-mute">
-                        {s}
-                      </span>
-                    </span>
-                  ))
-              ) : (
-                <span className="text-[13px] text-ink-soft">
-                  {report.insufficientSignal ? '—' : 'none'}
-                </span>
-              )}
-            </div>
-          </div>
-          <ScoreCell label="Craft" value={report.insufficientSignal && !hasFindings ? '—' : report.craftScore} />
-          <div className="min-w-40 flex-1 px-5 py-1">
-            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
-              Vibe meter
+              Reads as generated
             </p>
             <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-well">
               <div
@@ -114,25 +83,60 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
             </div>
             <p className="mt-1.5 text-[12px] leading-snug text-ink-soft">{report.vibeVerdict}</p>
           </div>
+
+          {/* Exposure — table stakes, and the reason to trust the rest */}
+          <div className="px-5 py-1">
+            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
+              Exposure
+            </p>
+            <p className="mt-1 flex items-baseline gap-1.5">
+              <span
+                className="display text-3xl tabular-nums"
+                style={{ color: gradeColor(report.securityGrade) }}
+              >
+                {report.securityGrade}
+              </span>
+              <span className="font-mono text-[10px] text-ink-mute">
+                {report.insufficientSignal ? '' : `${report.securityScore}/100`}
+              </span>
+            </p>
+            <p className="mt-1 text-[12px] leading-snug text-ink-mute">
+              {hasFindings
+                ? severities
+                    .filter((s) => report.tally[s] > 0)
+                    .map((s) => `${report.tally[s]} ${s}`)
+                    .join(' · ')
+                : report.insufficientSignal
+                  ? '—'
+                  : 'nothing found in source'}
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Why a grade is capped — the single most useful line when it applies.
           Security caps come from proven findings; the craft cap is the
           accessibility floor, stated rather than hidden in the number. */}
-      {[report.securityCapReason, report.craftCapReason].filter(Boolean).map((reason) => (
-        <div key={reason} className="rule-hair px-6 py-3 sm:px-8">
-          <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
-            <span
-              className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
-              style={{ background: 'var(--color-signal)' }}
-            >
-              Capped
-            </span>
-            <span>{reason}</span>
-          </p>
-        </div>
-      ))}
+      {(
+        [
+          ['Craft', report.craftCapReason],
+          ['Exposure', report.securityCapReason],
+        ] as const
+      )
+        .filter(([, reason]) => Boolean(reason))
+        .map(([which, reason]) => (
+          <div key={which} className="rule-hair px-6 py-3 sm:px-8">
+            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
+              <span
+                className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
+                style={{ background: 'var(--color-signal)' }}
+              >
+                {which} capped
+              </span>
+              <span>{reason}</span>
+            </p>
+          </div>
+        ))}
 
       {/* Insufficient-signal / clean honesty banner */}
       {(report.insufficientSignal || report.clean) && (
@@ -145,15 +149,21 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
             </p>
           ) : (
             <p>
-              <strong className="font-semibold text-ink">No issues found in source.</strong> Our
-              source checks didn&apos;t flag anything — a good sign, but read the limits below.
+              <strong className="font-semibold text-ink">Nothing flagged in the source.</strong>{' '}
+              No exposure findings and no craft findings. Read the limits below before treating
+              that as a clean bill of health.
             </p>
           )}
         </div>
       )}
 
-      {/* The craft rundown — every area, worst first */}
-      <div className="rule-hair grid grid-cols-2 gap-x-6 gap-y-3 px-6 py-4 sm:grid-cols-4 sm:px-8">
+      {/* The craft rundown — the seven layers, worst first. This is the
+          substance behind the headline grade, so it is labelled and sits
+          directly under it rather than reading as a footer. */}
+      <div className="rule-hair px-6 pt-4 sm:px-8">
+        <p className="label">Where the judgment shows</p>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 pb-4 pt-3 sm:grid-cols-4 sm:px-8">
         {report.categories.map((cat) => (
           <div key={cat.id}>
             <div className="flex items-baseline justify-between gap-2">

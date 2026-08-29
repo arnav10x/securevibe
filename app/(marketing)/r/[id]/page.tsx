@@ -31,7 +31,7 @@ const CHECK_NAMES: Record<string, string> = {
   platform_config: 'Platform config',
   dependency: 'Dependencies',
   insecure_pattern: 'Code patterns',
-  design: 'Design audit',
+  design: 'Craft',
 };
 
 const SEVERITY_COLOR: Record<string, string> = {

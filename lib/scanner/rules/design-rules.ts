@@ -240,6 +240,17 @@ export const DESIGN_RULES: DesignRule[] = [
     layer: 'typography',
     scope: 'line',
     regex: /\btext-\[(?:[0-9]|1[01])px\]|font-size:\s*(?:[0-9]|1[01])px\b/,
+    // An uppercase micro-label with wide tracking reads larger than its
+    // nominal size: capitals have no descenders, cap height stands in for
+    // x-height, and the letter-spacing separates the forms. Ten pixels of
+    // tracked capitals is a deliberate label style, not unreadable body text.
+    // Only 10px and 11px earn this exemption, and only with both signals
+    // present. Nine pixels and below still fires, tracked or not.
+    test: (line) => {
+      const tracked = /\buppercase\b/.test(line) && /\btracking-/.test(line);
+      const labelSize = /\btext-\[1[01]px\]|font-size:\s*1[01]px\b/.test(line);
+      return !(tracked && labelSize);
+    },
     extensions: UI_AND_CSS,
     maxFindings: 3,
     vibeWeight: 0,
@@ -326,7 +337,10 @@ export const DESIGN_RULES: DesignRule[] = [
     scope: 'line',
     regex:
       /(?<!max-)(?<!min-)\bw-\[(?:4\d\d|[5-9]\d\d|\d{4,})px\]|(?<![-\w])width:\s*(?:4\d\d|[5-9]\d\d|\d{4,})px/,
-    unless: /\bmax-w-full\b|\bmd:|\blg:|@media/,
+    // Decoration is exempt. An aria-hidden, non-interactive background shape
+    // holds no content, cannot overflow the reading column, and is sized on
+    // purpose. The rule is about content containers.
+    unless: /\bmax-w-full\b|\bmd:|\blg:|@media|aria-hidden|pointer-events-none/,
     extensions: UI_AND_CSS,
     maxFindings: 3,
     vibeWeight: 0,
@@ -346,7 +360,9 @@ export const DESIGN_RULES: DesignRule[] = [
     layer: 'layout',
     scope: 'line',
     regex: /\bh-\[(?:[3-9]\d\d|\d{4,})px\]/,
-    unless: /overflow-(?:auto|y-auto|scroll)|\bmin-h-/,
+    // Same exemption as the width rule: a decorative shape is not a content
+    // container, so a fixed height on it clips nothing.
+    unless: /overflow-(?:auto|y-auto|scroll)|\bmin-h-|aria-hidden|pointer-events-none/,
     extensions: UI,
     maxFindings: 3,
     vibeWeight: 0.3,

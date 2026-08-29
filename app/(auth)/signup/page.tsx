@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { Alert, Button, Card, Input, Label } from '@/components/ui';
 import { IconMail } from '@/components/icons';
 
@@ -17,21 +18,23 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) {
-      setError('Please use a password of at least 8 characters.');
+      setError('Use a password of at least 8 characters.');
       return;
     }
     setLoading(true);
     const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-      },
-    });
+    const { data, error } = await supabase.auth
+      .signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        },
+      })
+      .catch((e: unknown) => ({ data: { user: null }, error: e as { message: string } }));
     setLoading(false);
     if (error) {
-      setError(error.message);
+      setError(authErrorMessage(error.message));
       return;
     }
     // Supabase quirk: signing up with an existing email returns a fake user
@@ -71,7 +74,7 @@ export default function SignupPage() {
     <Card>
       <h1 className="mb-1 display text-2xl text-ink">Create your account</h1>
       <p className="mb-6 text-sm text-ink-soft">
-        Free plan: 3 security scans a month. No credit card needed.
+        Free plan: 3 scans a month. No credit card needed.
       </p>
 
       {error && (

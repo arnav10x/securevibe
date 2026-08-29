@@ -25,77 +25,108 @@ import {
   IconScan,
 } from '@/components/icons';
 
-// The five checks as ledger entries, not marketing cards.
+// The seven craft layers as ledger entries, in the order they carry weight
+// in the score, plus exposure as the eighth. Craft is the product; security
+// is table stakes and the reason to trust the rest.
 const CHECKS = [
   {
-    icon: IconKey,
+    icon: IconLayout,
     fig: '01',
-    name: 'Secrets',
-    title: 'Exposed secrets & API keys',
-    body: 'Keys and credentials committed straight into the code. Bots find these within minutes of a repo going public — and the bill lands on your card.',
-    detects: ['sk_live keys', 'AWS credentials', '.env files', 'DB passwords'],
-    severity: 'High – Critical',
+    name: 'Design tokens',
+    title: 'Whether a design system exists at all',
+    body: 'A design system is a set of decisions. When there is no theme, no custom properties and no token file, every color and radius comes from the framework defaults every other project also ships. Absence is the tell.',
+    detects: ['No theme extension', 'Defaults used ad hoc', 'One radius everywhere', 'Multi-hue gradients'],
+    severity: '22% of craft',
   },
   {
-    icon: IconDatabase,
+    icon: IconScan,
     fig: '02',
-    name: 'Platform config',
-    title: 'Wide-open databases',
-    body: 'Supabase tables without Row Level Security and Firebase rules set to "allow everyone". The demo works — while anyone on the internet can read your users\' data.',
-    detects: ['RLS disabled', 'Firebase open rules', 'Service keys client-side'],
-    severity: 'High – Critical',
+    name: 'State coverage',
+    title: 'Empty, loading, error, offline',
+    body: 'Models generate the happy path completely and reliably. Everything else is absent or a placeholder: lists that never handle zero items, spinners driven by a timer, errors swallowed whole, and no error boundary anywhere in the tree.',
+    detects: ['No empty states', 'No pending feedback', 'Errors discarded', 'No error boundary'],
+    severity: '20% of craft',
   },
   {
     icon: IconBraces,
     fig: '03',
-    name: 'Code patterns',
-    title: 'Insecure code patterns',
-    body: 'SQL built by gluing strings together, eval() on user input, disabled HTTPS checks, and "admin" flags stored in the browser where anyone can flip them.',
-    detects: ['SQL concatenation', 'eval() on input', 'TLS checks off', 'Client-side auth'],
-    severity: 'Medium – Critical',
+    name: 'Typography',
+    title: 'A scale, or sizes picked per element',
+    body: 'Size hierarchy is a formula and models produce it perfectly. Attention hierarchy is a judgment and they do not. We check whether the type came from a scale, whether the weight range can build hierarchy without shouting, and whether anything is unreadable.',
+    detects: ['One face doing every job', 'Off-scale one-off sizes', 'Bold-and-normal only', 'Below the legibility floor'],
+    severity: '15% of craft',
   },
   {
     icon: IconScan,
     fig: '04',
-    name: 'Dependencies',
-    title: 'Fake & risky dependencies',
-    body: 'AI tools invent package names that don\'t exist — and attackers register those names with malware ("slopsquatting"). Every dependency is verified against the real registries.',
-    detects: ['Hallucinated packages', 'Brand-new packages', 'npm + PyPI verified'],
-    severity: 'Medium – Critical',
+    name: 'Interaction & motion',
+    title: 'Whether the interface answers you',
+    body: 'A control that does not respond feels dead in a way people register without being able to name. We look for hover and press feedback, pending states on submits, motion that carries information, and durations inside the usable band.',
+    detects: ['No hover or press state', 'Forms with no pending state', 'transition-all everywhere', 'Reduced motion ignored'],
+    severity: '13% of craft',
   },
   {
     icon: IconLayout,
     fig: '05',
-    name: 'Design audit',
-    title: 'The vibe-coded look, graded',
-    body: 'The tells that mark a site as AI-generated the moment it loads: purple-gradient template heroes, emoji icons, "Trusted by 10,000+" claims with no users, placeholder legal pages, buttons that go nowhere. Judged against the standards real design teams use — WCAG, Apple HIG, Nielsen heuristics — and graded A+ to F.',
-    detects: ['Template landing pages', 'Fake social proof', 'Dead links & stub features', 'Accessibility failures'],
-    severity: 'Graded A+ – F',
+    name: 'Structural layout',
+    title: 'Designed against a content model, or one example',
+    body: 'The canonical generated page runs hero, feature grid, testimonials, pricing, call to action, with nothing in the sequence specific to this product. Fixed heights on variable content are the direct fingerprint of designing against one hardcoded example.',
+    detects: ['The template sequence', 'Fixed heights on content', 'No responsive judgment', 'One file holds the page'],
+    severity: '12% of craft',
+  },
+  {
+    icon: IconBraces,
+    fig: '06',
+    name: 'Copy & content',
+    title: 'Voice, specificity, and honest claims',
+    body: 'Copy tells as loudly as pixels. Invented user counts and testimonials are the fastest credibility destroyer a page can carry, and they are a real legal exposure. Superlatives are the statistical average of all marketing text, so readers discount them.',
+    detects: ['Fabricated social proof', 'Placeholder latin', 'Superlative-dense voice', 'Links that go nowhere'],
+    severity: '10% of craft',
+  },
+  {
+    icon: IconKey,
+    fig: '07',
+    name: 'Accessibility floor',
+    title: 'A floor, not a gradient',
+    body: 'Below the floor we cap the craft grade no matter what else is true, because an interface keyboard users cannot operate is not well designed however it photographs. Focus styles, semantics, labels, contrast, and zoom.',
+    detects: ['Focus outline removed', 'Click handlers on divs', 'Placeholder as the only label', 'Contrast below 4.5:1'],
+    severity: 'Caps the grade',
+  },
+  {
+    icon: IconDatabase,
+    fig: '08',
+    name: 'Exposure',
+    title: 'Security, as table stakes',
+    body: 'Committed keys, databases without row-level security, packages that do not exist, and the injection surfaces AI-generated code produces most. Scored separately and never averaged into craft: good typography must not hide a leaked key.',
+    detects: ['sk_live keys & .env files', 'RLS disabled', 'Hallucinated packages', 'Known CVEs via OSV'],
+    severity: 'Scored separately',
   },
 ];
 
-// The detection registry, excerpted. Dense on purpose.
+// The detection registry, excerpted. Craft tells lead; exposure follows.
+// Dense on purpose: a list you can check against your own repo persuades
+// where a claim about accuracy does not.
 const REGISTRY: { sev: 'critical' | 'high' | 'medium'; name: string }[] = [
+  { sev: 'high', name: 'No design tokens anywhere' },
+  { sev: 'high', name: 'The canonical generated page sequence' },
+  { sev: 'high', name: 'Lists that never render empty' },
+  { sev: 'high', name: 'No error boundary in the tree' },
+  { sev: 'high', name: 'Loading states driven by setTimeout' },
+  { sev: 'high', name: '"Trusted by 10,000+" invented claims' },
+  { sev: 'high', name: 'Login forms that never authenticate' },
+  { sev: 'high', name: 'Focus outlines removed, nothing added' },
+  { sev: 'medium', name: 'Multi-hue gradient surfaces' },
+  { sev: 'medium', name: 'Emoji standing in for icons' },
+  { sev: 'medium', name: 'Fabricated testimonials' },
+  { sev: 'medium', name: 'Forms that submit with no feedback' },
+  { sev: 'medium', name: 'Click handlers on plain divs' },
+  { sev: 'medium', name: 'One spacing value doing every job' },
+  { sev: 'medium', name: 'Placeholder legal pages' },
   { sev: 'critical', name: 'sk_live_… Stripe secret keys' },
-  { sev: 'critical', name: 'AKIA… AWS access keys' },
-  { sev: 'critical', name: 'Private key blocks (PEM)' },
   { sev: 'critical', name: 'Supabase service-role keys' },
   { sev: 'critical', name: 'RLS disabled on user tables' },
-  { sev: 'critical', name: 'Firebase rules: allow everyone' },
-  { sev: 'high', name: 'GitHub personal access tokens' },
-  { sev: 'high', name: '.env committed to the repo' },
-  { sev: 'high', name: 'eval() on user input' },
-  { sev: 'high', name: 'SQL built by string concat' },
-  { sev: 'high', name: 'Shell exec with user input' },
-  { sev: 'high', name: 'Package names that don\'t exist' },
-  { sev: 'high', name: 'Login forms that don\'t authenticate' },
-  { sev: 'high', name: '"Trusted by 10,000+" invented claims' },
-  { sev: 'medium', name: 'TLS certificate checks disabled' },
-  { sev: 'medium', name: 'CORS set to *' },
-  { sev: 'medium', name: '"admin" flags in localStorage' },
-  { sev: 'medium', name: 'Packages younger than 30 days' },
-  { sev: 'medium', name: 'Purple-gradient template heroes' },
-  { sev: 'medium', name: 'Emoji standing in for icons' },
+  { sev: 'high', name: 'Package names that do not exist' },
+  { sev: 'high', name: 'Known CVEs in your dependencies' },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -111,7 +142,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What does the instant scan show without an account?',
-    a: 'Your repo\'s letter grade, the vibe meter, the full tally, plus every medium and low-severity finding with its fix. Critical and high-severity findings come back sealed — you can see how many exist and which check found them, but their contents open only with a free account. The scan you ran attaches to your new account automatically.',
+    a: 'Your craft grade, how generated it reads, the exposure grade, plus every medium and low-severity finding with its fix. Critical and high-severity findings come back sealed — you can see how many exist and which check found them, but their contents open only with a free account. The scan you ran attaches to your new account automatically.',
   },
   {
     q: 'Is my code used to train AI models?',
@@ -119,19 +150,19 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Do you run my code?',
-    a: 'No. SecureVibe performs static analysis only — it reads your files, it never executes them. That protects you and us.',
+    a: 'No. The audit is static analysis only — it reads your files, it never executes them. That protects you and us.',
   },
   {
     q: 'What can I scan?',
     a: 'Instantly: any public GitHub repository. With a free account: also a .zip upload of your project — up to 50 MB and 5,000 files. Private-repo support via GitHub integration is on the roadmap.',
   },
   {
-    q: 'Will this find every vulnerability?',
-    a: 'No — and be suspicious of any tool that claims otherwise. SecureVibe targets the most common, most damaging mistakes in AI-generated apps. It dramatically improves your odds, but it is not a substitute for a professional security audit.',
+    q: 'Is this just taste? Why should I trust the grade?',
+    a: 'The grade never comes from an opinion about whether your design is nice. Every finding is a named signal with a file-and-line citation you can check in ten seconds, and the score is computed in code from those findings. We never flag a color, a typeface, a framework, or a named style, and we never compare your product to some big company\u2019s. Read the methodology and the list of things we refuse to flag.',
   },
   {
-    q: 'I found something scary in my report. Now what?',
-    a: 'Every finding includes a plain-English fix. The golden rule for leaked secrets: rotate them (get a new key and revoke the old one) — deleting the file is not enough, because git history remembers.',
+    q: 'What do I actually do with a finding?',
+    a: 'Every finding ships with a copy-pasteable prompt written for your own coding agent: the file, the current state, the target state, what must not change, and the check that confirms it landed. Paste it into Cursor, Claude Code, or Lovable and the fix usually happens on the first try. For leaked secrets the rule is different: rotate the key, because deleting the file does not remove it from git history.',
   },
   {
     q: 'How do I cancel?',
@@ -183,20 +214,24 @@ export default function LandingPage() {
           </div>
           <div className="max-w-3xl">
             <Reveal>
-              <p className="label">Security clearance · for AI-built apps</p>
+              <p className="label">Design audit · for AI-built products</p>
             </Reveal>
             <Reveal delay={90}>
               <h1 className="display mt-6 text-[clamp(2.6rem,6vw,4.6rem)]">
                 Your AI built the app.
                 <br />
-                <em>Did it build it safely?</em>
+                <em>Can everyone tell?</em>
               </h1>
             </Reveal>
             <Reveal delay={180}>
               <p className="prose-serif mt-6 max-w-xl text-lg text-ink-soft">
-                Paste a repo below and find out in about a minute — no signup, nothing
-                installed. Five checks, a letter grade, and your source destroyed{' '}
-                <strong className="font-semibold text-ink">the moment the report exists.</strong>
+                Generic design became free in 2026, so generic design is now worth close to
+                nothing. Paste a repo and see, with evidence, exactly what marks your product
+                as machine-built{' '}
+                <strong className="font-semibold text-ink">
+                  to anyone with taste.
+                </strong>{' '}
+                About a minute, no signup, source destroyed the moment the report exists.
               </p>
             </Reveal>
             <Reveal delay={260}>
@@ -214,7 +249,7 @@ export default function LandingPage() {
             </Reveal>
             <Reveal delay={340}>
               <p className="mono-tight mt-8 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-mute">
-                5 checks · a letter grade · 0 bytes of code retained
+                7 craft layers · security included · 0 bytes of code retained
               </p>
             </Reveal>
           </div>
@@ -271,7 +306,7 @@ export default function LandingPage() {
                     </li>
                     <li>
                       <span className="mono-tight mr-2 font-mono text-[10px] text-verdant-ink">02</span>
-                      Five checks run in an isolated workspace; nothing executes
+                      Eight layers scored in an isolated workspace; nothing executes
                     </li>
                     <li>
                       <span className="mono-tight mr-2 font-mono text-[10px] text-verdant-ink">03</span>
@@ -310,10 +345,10 @@ export default function LandingPage() {
       {/* ================= The ledger of checks ================= */}
       <section id="checks" className="scroll-mt-24 py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <SectionHead n="01" title="What the scanner checks" />
+          <SectionHead n="01" title="What the audit grades" />
           <Reveal delay={80}>
             <h2 className="display mt-6 max-w-3xl text-[clamp(1.9rem,3.8vw,2.9rem)]">
-              How AI-built apps get breached — <em>and how they get spotted.</em>
+              Why AI-built products get discounted — <em>before anyone reads a word.</em>
             </h2>
           </Reveal>
 
@@ -541,7 +576,7 @@ export default function LandingPage() {
                     {[
                       '3 scans per month + zip uploads',
                       'Full reports — nothing sealed',
-                      'All five checks — security + design grade',
+                      'All seven craft layers + exposure',
                       'Same code-deletion guarantee',
                     ].map((feat) => (
                       <li key={feat} className="flex items-start gap-2.5">

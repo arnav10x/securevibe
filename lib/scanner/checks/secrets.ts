@@ -10,6 +10,9 @@ import {
 import {
   shannonEntropy,
   looksLikePlaceholder,
+  looksLikeDocExample,
+  isCommentLine,
+  isPatternDefinitionLine,
   maskLine,
   decodeJwtPayload,
   maskSecret,
@@ -138,10 +141,20 @@ export function checkSecretsInFile(
     const line = lines[i];
     if (line.length > 2000) continue; // minified/bundled line, skip
 
+    // A pattern definition is not a secret: a rule file that says
+    // "sk_live_ keys look like this" must not be reported as leaking one.
+    if (isPatternDefinitionLine(line)) continue;
+    const comment = isCommentLine(line);
+
     for (const rule of SECRET_RULES) {
       const match = rule.regex.exec(line);
       if (!match) continue;
       const secret = match[1];
+
+      // A made-up key in a doc comment ("sk_live_abc123def456") documents the
+      // format; it is not a credential. Both conditions are required, so a
+      // real key pasted into a comment still fires.
+      if (comment && looksLikeDocExample(secret)) continue;
 
       if (rule.requiresEntropy) {
         if (shannonEntropy(secret) < 3.5) continue;
@@ -156,17 +169,29 @@ export function checkSecretsInFile(
       if (seen.has(key)) continue;
       seen.add(key);
 
+      // A key inside a git-ignored file is not committed to the repository.
+      // We cannot say it is a leak, only that it is sitting in the folder, so
+      // the wording and the severity both step back. On a GitHub tarball this
+      // never applies: ignored files are not in the tarball at all.
+      const ignored = ctx.isGitignored?.(relPath) ?? false;
       findings.push({
         checkType: 'secret',
-        severity: rule.severity,
-        confidence: rule.confidence ?? 'verified',
+        severity: ignored ? 'low' : rule.severity,
+        confidence: ignored ? 'likely' : (rule.confidence ?? 'verified'),
         ruleId: rule.id,
-        title: rule.title,
-        explanation: rule.explanation,
+        title: ignored ? `${rule.title.replace(/ committed to code$/, '')} in a git-ignored file` : rule.title,
+        explanation: ignored
+          ? `${rule.explanation} This file is git-ignored, so it is probably ` +
+            'not in your repository. Confirm it was never committed before ' +
+            'this rule was added, because .gitignore does not remove history.'
+          : rule.explanation,
         filePath: relPath,
         lineStart: i + 1,
         evidenceMasked: maskLine(line, secret),
-        recommendation: rule.recommendation,
+        recommendation: ignored
+          ? 'Run "git log --all -- ' + relPath + '". If it returns nothing, ' +
+            'you are fine. If it returns commits, rotate the key and purge the file from history.'
+          : rule.recommendation,
       });
       break; // one rule per line is enough; most specific rules run first
     }
