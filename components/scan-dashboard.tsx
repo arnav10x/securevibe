@@ -39,7 +39,8 @@ import {
 import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
 import { fixPrompt, SEVERITY_COLOR, type FindingView } from '@/components/findings';
-import { Guilloche } from '@/components/guilloche';
+import { buildSectionPrompt } from '@/lib/scanner/section-prompt';
+import { GuillocheField } from '@/components/guilloche';
 
 /** Red means "needs fixing" and nothing else. */
 const WEAK = 63;
@@ -94,13 +95,12 @@ function VerdictCard({
     <div className="relative overflow-hidden px-6 pb-5 pt-4 sm:px-8">
       {/* The house engraving, faint, behind the verdict — the one branded
           surface in the app. Masked so it never competes with the text. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-24 -top-24 hidden h-[360px] w-[360px] opacity-[0.3] sm:block"
-        style={{ maskImage: 'radial-gradient(closest-side, black 40%, transparent 95%)' }}
-      >
-        <Guilloche />
-      </div>
+      <GuillocheField
+        size={360}
+        fade={[40, 95]}
+        opacity={0.3}
+        className="-right-24 -top-24 hidden sm:block"
+      />
 
       <div className="relative">
       <p className="label">Verdict</p>
@@ -242,6 +242,60 @@ function Gauge({ score, small = false }: { score: number | null; small?: boolean
         )}
       </span>
     </span>
+  );
+}
+
+// ─────────────── the whole-section fix prompt ──────────────────────────
+
+function SectionPrompt({ section, hint, groups }: {
+  section: string;
+  hint: string;
+  groups: { title: string; count: number; findings: FindingView[] }[];
+}) {
+  const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle');
+  const prompt = useMemo(
+    () => buildSectionPrompt({ section, hint, groups }),
+    [section, hint, groups],
+  );
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setState('copied');
+      setTimeout(() => setState('idle'), 2000);
+    } catch {
+      // Clipboard can be blocked (permissions, embedded webviews). Open the
+      // preview so the text is selectable instead of failing silently.
+      setState('manual');
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-[var(--line)] bg-sheet">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5">
+        <p className="text-[12.5px] leading-snug text-ink-soft">
+          <span className="font-semibold text-ink">Fix this whole section</span> with one
+          prompt for your coding agent.
+        </p>
+        <button
+          type="button"
+          onClick={copy}
+          className="mono-tight shrink-0 cursor-pointer rounded-full border border-ink bg-ink px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-paper transition-colors hover:bg-ink/85 focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+        >
+          {state === 'copied' ? 'Copied' : 'Copy prompt'}
+        </button>
+      </div>
+      <details open={state === 'manual'} className="border-t border-[var(--line)]">
+        <summary className="mono-tight cursor-pointer select-none px-3.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute hover:text-ink [&::-webkit-details-marker]:hidden [&::marker]:content-none">
+          {state === 'manual' ? 'Copy blocked. Select the text below' : 'Preview the prompt'}
+        </summary>
+        <div className="px-3.5 pb-3">
+          <pre className="readout w-0 min-w-full overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-soft">
+            {prompt}
+          </pre>
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -549,6 +603,10 @@ export function ScanDashboard({
               </span>
               <span>{capReason}</span>
             </p>
+          )}
+
+          {groups.length > 0 && (
+            <SectionPrompt section={activeMeta.label} hint={activeMeta.hint} groups={groups} />
           )}
 
           {groups.length === 0 ? (
