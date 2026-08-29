@@ -91,12 +91,12 @@ function VerdictCard({
   }
 
   return (
-    <div className="relative overflow-hidden px-6 pb-6 pt-5 sm:px-8">
+    <div className="relative overflow-hidden px-6 pb-5 pt-4 sm:px-8">
       {/* The house engraving, faint, behind the verdict — the one branded
           surface in the app. Masked so it never competes with the text. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-24 -top-24 hidden h-[420px] w-[420px] opacity-[0.35] sm:block"
+        className="pointer-events-none absolute -right-24 -top-24 hidden h-[360px] w-[360px] opacity-[0.3] sm:block"
         style={{ maskImage: 'radial-gradient(closest-side, black 40%, transparent 95%)' }}
       >
         <Guilloche />
@@ -107,13 +107,13 @@ function VerdictCard({
 
       {/* The one focal element on the page. */}
       {report.verdict && (
-        <p className="prose-serif mt-3 max-w-2xl text-[21px] leading-snug text-ink sm:text-[24px]">
+        <p className="prose-serif mt-2.5 max-w-3xl text-[19px] leading-snug text-ink sm:text-[22px]">
           {report.verdict}
         </p>
       )}
 
       {chips.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {chips.map((c) => (
             <span
               key={c.label}
@@ -130,7 +130,7 @@ function VerdictCard({
       )}
 
       {/* The evidence line: quiet, single-voice. */}
-      <div className="mt-9 flex items-center gap-5 sm:gap-7">
+      <div className="mt-7 flex items-center gap-5 sm:gap-7">
         <p className="shrink-0">
           <span className="display text-3xl leading-none tabular-nums text-ink">{ready}</span>
           <span className="display ml-0.5 text-lg text-ink-mute">%</span>
@@ -193,10 +193,9 @@ function VerdictCard({
         </div>
       </div>
 
-      <p className="mt-6 text-[12.5px] leading-relaxed text-ink-mute sm:mt-4">
-        Distance to production. {craftIsLower ? 'Craft' : 'Exposure'} is what holds it back —
-        the other axis sits at {craftIsLower ? exposure : craft}%. Never an average. Hover a
-        meter below to preview the gain from fixing that dimension.
+      <p className="mt-4 text-[12px] leading-relaxed text-ink-mute sm:mt-3">
+        Distance to production, set by the lower axis — never an average. Hover a meter to
+        preview the gain from fixing that dimension.
       </p>
       </div>
     </div>
@@ -205,12 +204,12 @@ function VerdictCard({
 
 // ─────────────────────────────── rings ─────────────────────────────────
 
-function Gauge({ score }: { score: number | null }) {
+function Gauge({ score, small = false }: { score: number | null; small?: boolean }) {
   const R = 30;
   const C = Math.PI * R; // half circle
   const value = score ?? 0;
   return (
-    <span className="relative inline-block h-[46px] w-[76px]">
+    <span className={`relative inline-block ${small ? 'h-[30px] w-[50px]' : 'h-[46px] w-[76px]'}`}>
       <svg viewBox="0 0 72 42" className="h-auto w-full">
         <path
           d="M 6 36 A 30 30 0 0 1 66 36"
@@ -232,13 +231,13 @@ function Gauge({ score }: { score: number | null }) {
         )}
       </svg>
       <span
-        className="display absolute inset-x-0 bottom-0 text-center text-[17px] leading-none tabular-nums"
+        className={`display absolute inset-x-0 bottom-0 text-center leading-none tabular-nums ${small ? 'text-[12px]' : 'text-[17px]'}`}
         style={{ color: score !== null && value < WEAK ? 'var(--color-signal)' : 'var(--color-ink)' }}
       >
         {score === null ? '—' : (
           <>
             {value}
-            <span className="text-[10px]">%</span>
+            <span className={small ? 'text-[8px]' : 'text-[10px]'}>%</span>
           </>
         )}
       </span>
@@ -401,16 +400,23 @@ export function ScanDashboard({
         <VerdictCard report={report} preview={preview} />
       </section>
 
-      {/* 2 ── the rings, and the panel they open */}
+      {/* 2 ── master-detail: a sticky rail of meters beside the reading
+          pane, so choosing a dimension and reading its findings never
+          requires scrolling apart. On small screens the rail is the 3-up
+          gauge grid above the pane, as before. */}
+      <div className="space-y-5 lg:grid lg:grid-cols-[290px_minmax(0,1fr)] lg:items-start lg:gap-5 lg:space-y-0">
+      {/* .plate pins position:relative in globals, which beats the layered
+          sticky utility — so the sticky wrapper is a bare div. */}
+      <div className="lg:sticky lg:top-24">
       <section className="plate overflow-hidden">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6">
           <p className="label">Where the judgment shows</p>
-          <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+          <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute lg:hidden">
             Select a layer
           </p>
         </div>
 
-        <div className="grid grid-cols-3" role="tablist" aria-label="Report areas">
+        <div className="grid grid-cols-3 lg:hidden" role="tablist" aria-label="Report areas">
           {PANEL_ORDER.map((p, i) => {
             const count = byPanel.get(p.id)?.length ?? 0;
             const isActive = active === p.id;
@@ -463,6 +469,59 @@ export function ScanDashboard({
           })}
         </div>
 
+        {/* The same nine meters as compact rows: always in view while the
+            findings scroll, so switching dimensions is one click, not a
+            round trip. */}
+        <div className="hidden lg:block" role="tablist" aria-label="Report areas">
+          {PANEL_ORDER.map((p) => {
+            const count = byPanel.get(p.id)?.length ?? 0;
+            const isActive = active === p.id;
+            const score = scoreFor(p.id);
+            const clear = count === 0;
+            const healthy = clear && (score === null || score >= WEAK);
+            const rowProjection = hovered === p.id && !clear ? projectFor(p.id) : null;
+            const ready = readinessScore(report.craftScore, report.securityScore);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                title={p.hint}
+                onClick={() => setActive(p.id)}
+                onMouseEnter={() => setHovered(p.id)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(p.id)}
+                onBlur={() => setHovered(null)}
+                className={`flex w-full cursor-pointer items-center gap-3 border-b border-[var(--line)] px-4 py-2.5 text-left transition-colors last:border-b-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
+                  isActive ? 'bg-well' : 'hover:bg-sheet'
+                } ${healthy && !isActive ? 'opacity-45 hover:opacity-90' : ''}`}
+                style={isActive ? { boxShadow: 'inset 3px 0 0 var(--color-ink)' } : undefined}
+              >
+                <Gauge score={score} small />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
+                    {p.label}
+                  </span>
+                  <span className="mono-tight block font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-mute">
+                    {healthy ? 'clear' : clear ? 'no evidence yet' : `${count} finding${count === 1 ? '' : 's'}`}
+                  </span>
+                </span>
+                {rowProjection !== null && rowProjection > ready && (
+                  <span className="mono-tight shrink-0 font-mono text-[10px] font-semibold tabular-nums text-ink-soft">
+                    → {rowProjection}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      </div>
+
+      {/* The reading column: panel, strengths, and the honest footer. */}
+      <div className="space-y-5">
+      <section className="plate overflow-hidden">
         {/* 3 ── the panel: signals in the selected layer */}
         <div className="px-4 py-5 sm:px-6">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -581,6 +640,8 @@ export function ScanDashboard({
           </p>
         )}
       </section>
+      </div>
+      </div>
     </div>
   );
 }

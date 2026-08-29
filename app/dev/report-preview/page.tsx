@@ -18,7 +18,7 @@ export default async function ReportPreviewPage() {
   const result = await scanDirectory(fixture, { fetchImpl: offline });
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <p className="label mb-5">Dev preview — vibe-app fixture, scanned live</p>
 
       {result.stats.report && (
