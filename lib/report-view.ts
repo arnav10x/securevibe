@@ -1,62 +1,54 @@
-// Pure view-model helpers for the scan dashboard: which layer a finding
-// belongs to, and how findings group into signals inside a layer.
+// Pure view-model helpers for the scan dashboard: which panel a finding
+// belongs to, how findings group into signals inside a panel, and the
+// hover projection ("fix this dimension and the score becomes N").
 //
-// The dashboard shows one ring per craft layer plus one for exposure, and
-// clicking a ring opens that layer's findings grouped by SIGNAL (the rule
-// that fired) rather than one long flat list. Grouping needs a stable
-// mapping from a persisted finding back to its layer; rule ids carry it as
-// a prefix (tokens-, states-, type-...). Rows written before rule_id
-// existed fall back to title matching.
+// Panels are the eight scored dimensions from SECUREVIBE-UIUX.md plus
+// exposure. Rule ids carry the mapping as a prefix; rows written before
+// rule_id existed fall back to title matching.
 
-import { CRAFT_LAYERS, DESIGN_RULES, type CraftLayerId } from '@/lib/scanner/rules/design-rules';
+import { DESIGN_RULES } from '@/lib/scanner/rules/design-rules';
+import {
+  DIMENSIONS,
+  projectDimensionFixed,
+  type CraftInput,
+  type DimensionId,
+} from '@/lib/scanner/craft-score';
 
-export type PanelId = CraftLayerId | 'exposure';
+export type PanelId = DimensionId | 'exposure';
 
-/**
- * One line of information scent per ring (SECUREVIBE.md 2.14): a label like
- * "State coverage" tells a founder nothing until they learn the system, so
- * each ring carries what it actually measures.
- */
-const PANEL_HINTS: Record<PanelId, string> = {
-  tokens: 'Does a design system exist at all',
-  states: 'Empty, loading, error, offline',
-  typography: 'A scale, or sizes picked per element',
-  motion: 'Does the interface answer you',
-  layout: 'Built to a content model, or one example',
-  copy: 'Voice, specificity, honest claims',
-  accessibility: 'Keyboard, labels, contrast: the floor',
-  exposure: 'Keys, injections, open databases',
-};
-
-/** Ring order: the seven craft layers by weight, then exposure. */
+/** Ring order: the eight dimensions, then exposure. */
 export const PANEL_ORDER: { id: PanelId; label: string; hint: string }[] = [
-  ...CRAFT_LAYERS.map((l) => ({ id: l.id as PanelId, label: l.label, hint: PANEL_HINTS[l.id] })),
-  { id: 'exposure', label: 'Exposure', hint: PANEL_HINTS.exposure },
+  ...DIMENSIONS.map((d) => ({ id: d.id as PanelId, label: d.label, hint: d.hint })),
+  { id: 'exposure', label: 'Exposure', hint: 'Keys, injections, open databases' },
 ];
 
-const PREFIX_TO_LAYER: Record<string, CraftLayerId> = {
-  tokens: 'tokens',
+const PREFIX_TO_DIM: Record<string, DimensionId> = {
+  tokens: 'system',
   states: 'states',
   type: 'typography',
   motion: 'motion',
   layout: 'layout',
-  copy: 'copy',
+  copy: 'evidence',
+  evidence: 'evidence',
   a11y: 'accessibility',
 };
 
-const TITLE_TO_LAYER = new Map(DESIGN_RULES.map((r) => [r.title, r.layer]));
+/** Rules whose home differs from their id prefix. */
+const RULE_DIM = new Map<string, DimensionId>(DESIGN_RULES.map((r) => [r.id, r.layer]));
+const TITLE_DIM = new Map<string, DimensionId>(DESIGN_RULES.map((r) => [r.title, r.layer]));
 
 /**
  * Legacy fallback for findings saved before rule_id was persisted: the
  * aggregate rules build titles dynamically, so match on their stable parts.
  */
-const LEGACY_TITLE_PATTERNS: [RegExp, CraftLayerId][] = [
-  [/corner radii|shadow depths|spacing value|pixel spacing|kit components|icons drawn|framework defaults|made per element|gradient|blur orbs/i, 'tokens'],
-  [/empty case|pending state anywhere|error boundary|timer, not a request|coming soon|caught and discarded/i, 'states'],
-  [/typeface|typographic|weight range|legibility floor|font size/i, 'typography'],
+const LEGACY_TITLE_PATTERNS: [RegExp, DimensionId][] = [
+  [/corner radii|shadow depths|kit components|icons drawn|framework defaults|made per element/i, 'system'],
+  [/gradient|blur orbs|luminance/i, 'color'],
+  [/spacing value|pixel spacing|page sequence|responsive breakpoints|holds the whole page|fixed pixel width|fixed height|same length|client-rendered/i, 'layout'],
+  [/empty case|pending state anywhere|error boundary|timer, not a request|caught and discarded/i, 'states'],
+  [/typeface|typographic|weight range|legibility floor|font size|emoji|superlative|closing pitch|mechanism/i, 'typography'],
   [/hover or press|pending feedback|reduced-motion|transition-all|slower than the usable/i, 'motion'],
-  [/page sequence|responsive breakpoints|holds the whole page|fixed pixel width|fixed height/i, 'layout'],
-  [/alt text|says nothing|focus outline|tabindex|pinch-zoom|luminance|language never declared|heading levels|only label|non-interactive element/i, 'accessibility'],
+  [/alt text|says nothing|focus outline|tabindex|pinch-zoom|language never declared|heading levels|only label|non-interactive element/i, 'accessibility'],
 ];
 
 export function panelForFinding(f: {
@@ -67,17 +59,18 @@ export function panelForFinding(f: {
   if (f.checkType && f.checkType !== 'design') return 'exposure';
 
   if (f.ruleId) {
-    const prefix = f.ruleId.split('-')[0];
-    const mapped = PREFIX_TO_LAYER[prefix];
+    const exact = RULE_DIM.get(f.ruleId);
+    if (exact) return exact;
+    const mapped = PREFIX_TO_DIM[f.ruleId.split('-')[0]];
     if (mapped) return mapped;
   }
-  const byTitle = TITLE_TO_LAYER.get(f.title);
+  const byTitle = TITLE_DIM.get(f.title);
   if (byTitle) return byTitle;
-  for (const [re, layer] of LEGACY_TITLE_PATTERNS) {
-    if (re.test(f.title)) return layer;
+  for (const [re, dim] of LEGACY_TITLE_PATTERNS) {
+    if (re.test(f.title)) return dim;
   }
-  // Copy carries the most rules; the least-wrong home for an unknown tell.
-  return 'copy';
+  // The evidence dimension carries the most content rules; least-wrong home.
+  return 'evidence';
 }
 
 const SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -93,8 +86,8 @@ export interface SignalGroup<F> {
 
 /**
  * One group per signal (rule), worst first. This is the second layer of
- * categorization the panel shows: a layer opens into its signals, and a
- * signal opens into its occurrences.
+ * categorization the panel shows: a dimension opens into its signals, and
+ * a signal opens into its occurrences.
  */
 export function groupBySignal<
   F extends { ruleId?: string | null; title: string; severity: string },
@@ -129,37 +122,39 @@ export function readinessScore(craftScore: number, securityScore: number): numbe
   return Math.max(0, Math.min(craftScore, securityScore));
 }
 
+/** The stored scoring input, as it rides in report.craftDetail. */
+export interface CraftDetail {
+  positives: { id: string; label: string; dimension: string; points: number }[];
+  tells: string[];
+  ceilings: { max: number; reason: string; dimension: string }[];
+  dimensionCaps: Partial<Record<string, number>>;
+}
+
 /**
- * Where the readiness bar would land if every finding in one layer were
- * fixed — the hover preview on the progress bar, and the goal-gradient
- * sentence in the panel ("fixing this takes you from 27% to 37%").
- *
- * Craft recomputes from the published layer weights with the chosen layer
- * at 100. The accessibility-floor cap stays in force unless the fixed
- * layer IS accessibility (fixing the floor removes the cap). Fixing
- * exposure sends that axis to 100, so readiness becomes the craft score.
+ * Where the readiness bar lands if one dimension were fully fixed. Fixing
+ * a dimension earns its full budget, drops its tells from the density
+ * count, and lifts any ceiling it owns. Fixing exposure sends that axis
+ * to 100, so readiness becomes the craft score.
  */
 export function projectedReadiness(
   report: {
     craftScore: number;
     securityScore: number;
-    craftCapReason: string | null;
-    categories: { id: string; score: number }[];
+    craftDetail?: CraftDetail;
   },
-  layer: PanelId,
+  panel: PanelId,
 ): number {
-  if (layer === 'exposure') {
+  if (panel === 'exposure') {
     return readinessScore(report.craftScore, 100);
   }
-  let weighted = 0;
-  for (const l of CRAFT_LAYERS) {
-    const score =
-      l.id === layer ? 100 : (report.categories.find((c) => c.id === l.id)?.score ?? 100);
-    weighted += score * l.weight;
-  }
-  let craft = Math.round(weighted / 100);
-  if (report.craftCapReason && layer !== 'accessibility') {
-    craft = Math.min(craft, 60);
-  }
-  return readinessScore(craft, report.securityScore);
+  const detail = report.craftDetail;
+  if (!detail) return readinessScore(report.craftScore, report.securityScore);
+  const input: CraftInput = {
+    positives: detail.positives.map((p) => ({ ...p, dimension: p.dimension as DimensionId })),
+    tells: detail.tells,
+    ceilings: detail.ceilings.map((c) => ({ ...c, dimension: c.dimension as DimensionId })),
+    dimensionCaps: detail.dimensionCaps as CraftInput['dimensionCaps'],
+  };
+  const projectedCraft = projectDimensionFixed(input, panel);
+  return readinessScore(projectedCraft, report.securityScore);
 }

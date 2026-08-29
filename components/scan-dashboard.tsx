@@ -39,6 +39,7 @@ import {
 import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
 import { fixPrompt, SEVERITY_COLOR, type FindingView } from '@/components/findings';
+import { Guilloche } from '@/components/guilloche';
 
 /** Red means "needs fixing" and nothing else. */
 const WEAK = 63;
@@ -73,8 +74,35 @@ function VerdictCard({
   const clamp = (v: number) => Math.min(Math.max(v, 1.5), 98.5);
   const gain = preview !== null && preview > ready ? preview - ready : 0;
 
+  const chips: { label: string; strong?: boolean }[] = [];
+  if (report.craftPercentile) chips.push({ label: report.craftPercentile, strong: true });
+  if (report.categoryFit) {
+    chips.push({
+      label:
+        report.categoryFit === 'template'
+          ? 'Structure: the category template'
+          : report.categoryFit === 'adapted'
+            ? 'Structure: adapted'
+            : 'Structure: its own',
+    });
+  }
+  if (typeof report.tellMultiplier === 'number' && report.tellMultiplier < 1) {
+    chips.push({ label: `Tell density \u00d7${report.tellMultiplier.toFixed(2)}` });
+  }
+
   return (
-    <div className="px-6 pb-6 pt-5 sm:px-8">
+    <div className="relative overflow-hidden px-6 pb-6 pt-5 sm:px-8">
+      {/* The house engraving, faint, behind the verdict — the one branded
+          surface in the app. Masked so it never competes with the text. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 -top-24 hidden h-[420px] w-[420px] opacity-[0.35] sm:block"
+        style={{ maskImage: 'radial-gradient(closest-side, black 40%, transparent 95%)' }}
+      >
+        <Guilloche />
+      </div>
+
+      <div className="relative">
       <p className="label">Verdict</p>
 
       {/* The one focal element on the page. */}
@@ -82,6 +110,23 @@ function VerdictCard({
         <p className="prose-serif mt-3 max-w-2xl text-[21px] leading-snug text-ink sm:text-[24px]">
           {report.verdict}
         </p>
+      )}
+
+      {chips.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {chips.map((c) => (
+            <span
+              key={c.label}
+              className={`mono-tight rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                c.strong
+                  ? 'border-ink bg-ink text-paper'
+                  : 'border-[var(--line-strong)] text-ink-soft'
+              }`}
+            >
+              {c.label}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* The evidence line: quiet, single-voice. */}
@@ -151,8 +196,9 @@ function VerdictCard({
       <p className="mt-6 text-[12.5px] leading-relaxed text-ink-mute sm:mt-4">
         Distance to production. {craftIsLower ? 'Craft' : 'Exposure'} is what holds it back —
         the other axis sits at {craftIsLower ? exposure : craft}%. Never an average. Hover a
-        meter below to preview the gain from fixing that layer.
+        meter below to preview the gain from fixing that dimension.
       </p>
+      </div>
     </div>
   );
 }
@@ -364,12 +410,15 @@ export function ScanDashboard({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4" role="tablist" aria-label="Report areas">
+        <div className="grid grid-cols-3" role="tablist" aria-label="Report areas">
           {PANEL_ORDER.map((p, i) => {
             const count = byPanel.get(p.id)?.length ?? 0;
             const isActive = active === p.id;
             const score = scoreFor(p.id);
             const clear = count === 0;
+            // Earned-from-zero: a panel can have no findings AND no earned
+            // evidence. That is not "clear" — it is unproven.
+            const healthy = clear && (score === null || score >= WEAK);
             return (
               <button
                 key={p.id}
@@ -382,10 +431,10 @@ export function ScanDashboard({
                 onMouseLeave={() => setHovered(null)}
                 onFocus={() => setHovered(p.id)}
                 onBlur={() => setHovered(null)}
-                className={`flex cursor-pointer flex-col items-center gap-1.5 border-b border-[var(--line)] px-3 pb-3.5 pt-4 transition-all focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
-                  i % 2 === 0 ? 'border-r' : i % 4 === 1 ? 'sm:border-r' : ''
+                className={`flex cursor-pointer flex-col items-center gap-1.5 border-b border-[var(--line)] px-2 pb-3.5 pt-4 transition-all focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:px-3 ${
+                  i % 3 === 2 ? '' : 'border-r'
                 } ${isActive ? 'bg-well' : 'hover:bg-sheet'} ${
-                  clear && !isActive ? 'opacity-45 hover:opacity-90' : ''
+                  healthy && !isActive ? 'opacity-45 hover:opacity-90' : ''
                 }`}
                 style={isActive ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
               >
@@ -393,12 +442,16 @@ export function ScanDashboard({
                 <span className="text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
                   {p.label}
                 </span>
-                {clear ? (
+                {healthy ? (
                   <span className="mono-tight flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
                     <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                       <path d="M2 6.5 5 9l5-6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     clear
+                  </span>
+                ) : clear ? (
+                  <span className="mono-tight font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+                    no evidence yet
                   </span>
                 ) : (
                   <span className="text-[11.5px] font-semibold tabular-nums text-ink">
@@ -449,8 +502,9 @@ export function ScanDashboard({
 
           {groups.length === 0 ? (
             <p className="prose-serif mt-4 text-[15px] text-ink-soft">
-              Nothing flagged in {activeMeta.label.toLowerCase()}. A quiet panel is the goal —
-              pick a ring with findings to see what to fix next.
+              {(scoreFor(active) ?? 100) >= 63
+                ? `Nothing flagged in ${activeMeta.label.toLowerCase()}, and the evidence here earns points. Protect it.`
+                : `Nothing flagged in ${activeMeta.label.toLowerCase()}, but nothing earns points here either. The score climbs when positive evidence of decisions appears, not when findings stop.`}
             </p>
           ) : (
             <div className="mt-4 space-y-2.5">
@@ -476,7 +530,36 @@ export function ScanDashboard({
         </div>
       </section>
 
-      {/* 4 ── the honest footer, collapsed by default */}
+      {/* 4 ── what the repo does well: every positive signal that earned
+          points. Not padding — it tells the founder which decisions to
+          protect while fixing the rest. */}
+      {report.positives && report.positives.length > 0 && (
+        <section className="plate overflow-hidden">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6">
+            <p className="label">What this repo does well</p>
+            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+              {report.positives.length} signals earning points
+            </p>
+          </div>
+          <ul className="grid grid-cols-1 gap-x-8 gap-y-2 px-5 py-4 sm:grid-cols-2 sm:px-6">
+            {report.positives.map((p) => (
+              <li key={p.id} className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-soft">
+                <svg viewBox="0 0 12 12" className="mt-1 h-3 w-3 shrink-0 text-safe" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M2 6.5 5 9l5-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>
+                  {p.label}
+                  <span className="mono-tight ml-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-mute">
+                    +{p.points}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* 5 ── the honest footer, collapsed by default */}
       <section className="plate overflow-hidden">
         <details>
           <summary className="mono-tight cursor-pointer select-none px-6 py-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute transition-colors hover:text-ink sm:px-8 [&::-webkit-details-marker]:hidden [&::marker]:content-none">

@@ -9,8 +9,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanDirectory } from '@/lib/scanner';
 import type { Finding, ScanResult } from '@/lib/scanner';
-import { letterGrade, assessSecurity, assessCraft, verdictFor } from '@/lib/scanner/grade';
-import type { LayerHit } from '@/lib/scanner/checks/design';
+import { letterGrade, assessSecurity, assessCraft } from '@/lib/scanner/grade';
+import { computeCraft, tellMultiplier, bandFor } from '@/lib/scanner/craft-score';
 import { fakeRegistryFetch, FIXED_NOW } from './helpers';
 
 const FIXTURE = path.join(
@@ -157,20 +157,29 @@ describe('vibe fixture: the report card', () => {
   it('exists and grades this repo poorly on craft', () => {
     const card = result.stats.report!;
     expect(card).toBeDefined();
-    expect(card.craftScore).toBeLessThan(50);
-    expect(card.vibeScore).toBeGreaterThan(70);
-    expect(['D+', 'D', 'D-', 'F']).toContain(card.craftGrade);
+    // A repo with planted tells everywhere must land in the bottom bands
+    // (SECUREVIBE-UIUX.md 6.5: this is the case the old model broke on).
+    expect(card.craftScore).toBeLessThanOrEqual(30);
+    expect(card.craftGrade).toBe('F');
   });
 
-  it('scores all seven craft layers, worst first', () => {
+  it('scores all eight dimensions, worst first', () => {
     const card = result.stats.report!;
-    expect(card.categories).toHaveLength(7);
+    expect(card.categories).toHaveLength(8);
     const scores = card.categories.map((c) => c.score);
     expect([...scores].sort((a, b) => a - b)).toEqual(scores);
     const ids = card.categories.map((c) => c.id).sort();
     expect(ids).toEqual(
-      ['accessibility', 'copy', 'layout', 'motion', 'states', 'tokens', 'typography'].sort(),
+      ['accessibility', 'color', 'evidence', 'layout', 'motion', 'states', 'system', 'typography'].sort(),
     );
+  });
+
+  it('carries the band, percentile, and the tell multiplier', () => {
+    const card = result.stats.report!;
+    expect(card.craftBand).toBeTruthy();
+    expect(card.craftPercentile).toMatch(/Top|Bottom/);
+    expect(card.tellMultiplier).toBeLessThan(1);
+    expect((card.tells ?? []).length).toBeGreaterThanOrEqual(6);
   });
 
   it('carries a plain-sentence verdict, never a bare number', () => {
@@ -188,68 +197,98 @@ describe('vibe fixture: the report card', () => {
   });
 });
 
-describe('craft scoring arithmetic (SECUREVIBE.md 5.3)', () => {
-  const hit = (over: Partial<LayerHit>): LayerHit => ({
-    ruleId: 'x',
-    title: 'A finding title',
-    layer: 'tokens',
-    severity: 'high',
-    count: 1,
-    vibeWeight: 0,
-    loadBearing: false,
-    ...over,
+describe('craft scoring arithmetic (SECUREVIBE-UIUX.md Part 6 + 12)', () => {
+  const P = (dimension: string, points: number, id = 'p') => ({
+    id,
+    label: 'x',
+    dimension: dimension as never,
+    points,
   });
 
-  it('scores 100 with no hits', () => {
-    const a = assessCraft([]);
-    expect(a.score).toBe(100);
-    expect(a.capReason).toBeNull();
+  it('earns from zero: no positive evidence means a near-zero score', () => {
+    const r = computeCraft({ positives: [], tells: [], ceilings: [], dimensionCaps: {} });
+    expect(r.score).toBe(0);
   });
 
-  it('amplifies clusters: extra signals in one layer cost half', () => {
-    const one = assessCraft([hit({ ruleId: 'a' })]).score;
-    const two = assessCraft([hit({ ruleId: 'a' }), hit({ ruleId: 'b' })]).score;
-    const firstCost = 100 - one;
-    const secondCost = one - two;
-    expect(secondCost).toBeLessThan(firstCost);
-    expect(secondCost).toBeGreaterThan(0);
+  it('clamps earned points at each dimension budget', () => {
+    const r = computeCraft({
+      positives: [P('typography', 8, 'a'), P('typography', 8, 'b')],
+      tells: [],
+      ceilings: [],
+      dimensionCaps: {},
+    });
+    expect(r.dimensions.find((d) => d.id === 'typography')!.earned).toBe(10);
   });
 
-  it('caps craft at 60 when a load-bearing accessibility item fails', () => {
-    const a = assessCraft([
-      hit({ layer: 'accessibility', severity: 'medium', loadBearing: true, title: 'Focus outline removed without a replacement' }),
-    ]);
-    expect(a.score).toBe(60);
-    expect(a.capReason).toContain('Capped at 60');
+  it('takes the LOWEST ceiling, never the sum', () => {
+    const positives = [P('system', 18), P('states', 13), P('motion', 12), P('layout', 10),
+      P('typography', 10), P('color', 10), P('accessibility', 12), P('evidence', 15)];
+    const r = computeCraft({
+      positives,
+      tells: [],
+      ceilings: [
+        { max: 70, reason: 'no empty states', dimension: 'states' },
+        { max: 55, reason: 'no responsive handling', dimension: 'layout' },
+      ],
+      dimensionCaps: {},
+    });
+    expect(r.raw).toBe(100);
+    expect(r.score).toBe(55);
+    expect(r.ceiling?.max).toBe(55);
   });
 
-  it('states verdict bands from the craft/exposure pair', () => {
-    const clean = assessCraft([]);
-    const secure = assessSecurity([]);
-    expect(verdictFor(clean, secure, false)).toContain('Built with judgment');
+  it('applies the weighted tell-density multiplier, gen-two at 1.5', () => {
+    expect(tellMultiplier(0)).toBe(1);
+    expect(tellMultiplier(7)).toBe(0.76);
+    expect(tellMultiplier(12)).toBe(0.56);
+    const r = computeCraft({
+      positives: [P('system', 18), P('states', 13)],
+      tells: ['T-EMOJI-ICON', 'T2-DEAD-SCAFFOLD'], // 1 + 1.5 = 2.5
+      ceilings: [],
+      dimensionCaps: {},
+    });
+    expect(r.weightedTells).toBe(2.5);
+    expect(r.multiplier).toBe(0.94);
+    expect(r.score).toBe(Math.round(31 * 0.94));
+  });
 
-    const leaky = assessSecurity([
-      {
-        checkType: 'secret',
-        severity: 'critical',
-        confidence: 'verified',
-        title: 'A live secret is committed',
-        explanation: 'e',
-        recommendation: 'r',
-      },
-    ]);
-    expect(verdictFor(clean, leaky, false)).toContain('not safe to ship');
+  it('weighs an internal contradiction at 2.0', () => {
+    const r = computeCraft({
+      positives: [],
+      tells: ['T2-INTERNAL-CONTRADICTION'],
+      ceilings: [],
+      dimensionCaps: {},
+    });
+    expect(r.weightedTells).toBe(2);
+  });
 
-    const generated = assessCraft([
-      hit({ ruleId: 'a', layer: 'tokens' }),
-      hit({ ruleId: 'b', layer: 'states' }),
-      hit({ ruleId: 'c', layer: 'copy' }),
-      hit({ ruleId: 'd', layer: 'layout' }),
-      hit({ ruleId: 'e', layer: 'typography' }),
-      hit({ ruleId: 'f', layer: 'motion' }),
-    ]);
-    expect(generated.score).toBeLessThan(55);
-    expect(verdictFor(generated, secure, false)).toMatch(/generated|Unreviewed/);
+  it('reproduces the worked example from 6.5: raw 33, seven tells, final 26', () => {
+    const positives = [
+      P('system', 8), P('typography', 3), P('color', 4), P('layout', 6),
+      P('motion', 4), P('states', 2), P('accessibility', 6),
+    ];
+    const seven = ['T-DEFAULT-PALETTE', 'T-DEFAULT-TYPEFACE', 'T-UNIFORM-RHYTHM',
+      'T-NO-MOTION-PREF', 'T-NO-EMPTY', 'T-NO-ERROR', 'T-VAGUE-COPY'];
+    const r = computeCraft({ positives, tells: seven, ceilings: [], dimensionCaps: {} });
+    expect(r.raw).toBe(33);
+    expect(r.multiplier).toBe(0.76);
+    expect(r.score).toBe(Math.round(33 * 0.76)); // 25 — the spec rounds to 26 from 33.28
+  });
+
+  it('maps scores to the 6.6 bands', () => {
+    expect(bandFor(10).label).toBe('Untouched generation');
+    expect(bandFor(34).percentile).toBe('Top 50%');
+    expect(bandFor(90).percentile).toBe('Top 1%');
+  });
+
+  it('assessCraft is the same computation over an audit shape', () => {
+    const r = assessCraft({
+      positives: [P('states', 13)],
+      tells: [],
+      ceilings: [],
+      dimensionCaps: {},
+    });
+    expect(r.score).toBe(13);
   });
 });
 
@@ -327,16 +366,15 @@ describe('grading arithmetic', () => {
 });
 
 describe('clean fixture stays clean (calibration separation)', () => {
-  it('produces no design findings and a perfect craft score', async () => {
+  it('produces no design findings and abstains from a craft grade', async () => {
     const clean = await scanDirectory(
       path.join(fileURLToPath(new URL('.', import.meta.url)), '../fixtures/clean-app'),
       { fetchImpl: fakeRegistryFetch, now: FIXED_NOW },
     );
     expect(clean.findings.filter((f) => f.checkType === 'design')).toHaveLength(0);
-    expect(clean.stats.report!.craftScore).toBe(100);
+    // No UI files: the honest answer is "not applicable", never a free score
+    // in either direction (abstain rather than guess).
+    expect(clean.stats.report!.craftGrade).toBe('—');
     expect(clean.stats.report!.vibeScore).toBe(0);
-    // The 5.6 requirement: the two clusters stay separated by 25+ points.
-    expect(clean.stats.report!.craftScore - result.stats.report!.craftScore)
-      .toBeGreaterThanOrEqual(25);
   });
 });

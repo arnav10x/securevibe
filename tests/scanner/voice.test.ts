@@ -50,10 +50,11 @@ describe('every shipped rule passes the filter', () => {
 describe('verdict sentences pass the filter', () => {
   it('all bands', () => {
     const secure = assessSecurity([]);
-    const clean = assessCraft([]);
+    const empty = assessCraft({ positives: [], tells: [], ceilings: [], dimensionCaps: {} });
     for (const verdict of [
-      verdictFor(clean, secure, false),
-      verdictFor(clean, secure, true),
+      verdictFor(empty, secure, false, true),
+      verdictFor(empty, secure, true, true),
+      verdictFor(empty, secure, false, false),
     ]) {
       expect(voiceViolations(verdict)).toEqual([]);
     }

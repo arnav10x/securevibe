@@ -28,28 +28,23 @@
 // every string in this file through the language filter in ../voice.ts.
 
 import type { Severity } from '../types';
+import type { DimensionId } from '../craft-score';
 
-/**
- * The seven craft layers and their share of the craft score.
- * Weights must sum to 100. Order matters: strongest evidence first.
- */
-export const CRAFT_LAYERS = [
-  { id: 'tokens', label: 'Design tokens', weight: 22 },
-  { id: 'states', label: 'State coverage', weight: 20 },
-  { id: 'typography', label: 'Typography', weight: 15 },
-  { id: 'motion', label: 'Interaction & motion', weight: 13 },
-  { id: 'layout', label: 'Structural layout', weight: 12 },
-  { id: 'copy', label: 'Copy & content', weight: 10 },
-  { id: 'accessibility', label: 'Accessibility floor', weight: 8 },
-] as const;
-
-export type CraftLayerId = (typeof CRAFT_LAYERS)[number]['id'];
+/** Re-exported so older imports keep working; scoring owns the list now. */
+export { DIMENSIONS as CRAFT_LAYERS } from '../craft-score';
+export type CraftLayerId = DimensionId;
 
 export interface DesignRule {
   id: string;
   title: string;
   severity: Severity;
   layer: CraftLayerId;
+  /**
+   * The distinct tell this rule evidences, from the Part 7 / 12.3 signal
+   * bank. Distinct tells drive the density multiplier; five hits of one
+   * rule still count once.
+   */
+  tell?: string;
   /** 'line': regex tested per line. 'file': regex run over the whole file. */
   scope: 'line' | 'file';
   regex: RegExp;
@@ -97,7 +92,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'tokens-multi-hue-gradient',
     title: 'Multi-hue gradient as a surface treatment',
     severity: 'high',
-    layer: 'tokens',
+    layer: 'color',
+    tell: 'T-GRADIENT-DEFAULT',
     scope: 'line',
     regex: /\bbg-gradient-to-[trbl]{1,2}\b/,
     test: (line) => {
@@ -128,7 +124,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'tokens-gradient-text',
     title: 'Gradient fill on heading text',
     severity: 'medium',
-    layer: 'tokens',
+    layer: 'color',
+    tell: 'T-GRADIENT-DEFAULT',
     scope: 'line',
     regex: /(?=.*\bbg-clip-text\b)(?=.*\btext-transparent\b)/,
     extensions: UI,
@@ -147,7 +144,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'tokens-glow-orbs',
     title: 'Decorative blur orbs behind content',
     severity: 'medium',
-    layer: 'tokens',
+    layer: 'color',
     scope: 'line',
     regex:
       /(?=.*\bblur-[23]xl\b)(?=.*\b(?:bg|from)-[a-z]+-\d{2,3})|\bshadow-\[0_0_\d+px[^\]]*\]/,
@@ -194,7 +191,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'states-dead-end-button',
     title: 'Button that answers with a "coming soon" message',
     severity: 'medium',
-    layer: 'states',
+    layer: 'evidence',
+    tell: 'T2-DEAD-SCAFFOLD',
     scope: 'line',
     regex:
       /(?:alert|toast)\(\s*["'`][^"'`]*(?:coming soon|not (?:yet )?(?:implemented|available)|under construction)/i,
@@ -381,7 +379,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-lorem',
     title: 'Placeholder latin shipped in user-facing text',
     severity: 'high',
-    layer: 'copy',
+    layer: 'evidence',
     scope: 'line',
     regex: /lorem ipsum|dolor sit amet/i,
     extensions: UI,
@@ -400,7 +398,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-fabricated-user-count',
     title: 'User-count claim with nothing behind it',
     severity: 'high',
-    layer: 'copy',
+    layer: 'evidence',
+    tell: 'T-PLACEHOLDER-SOCIAL',
     scope: 'line',
     regex:
       /(?:trusted by|join(?:ed)?(?: by)?|loved by|used by)\s*(?:over\s*)?[\d,.]+k?\+?\s*(?:users|developers|devs|teams|customers|companies|founders|creators|builders)|[\d,]{4,}\+\s*(?:happy\s+)?(?:users|developers|customers|downloads|teams)/i,
@@ -422,7 +421,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-fabricated-testimonials',
     title: 'Testimonial data hardcoded in the page source',
     severity: 'medium',
-    layer: 'copy',
+    layer: 'evidence',
+    tell: 'T-PLACEHOLDER-SOCIAL',
     scope: 'line',
     regex: /(?:const|let|var)\s+(?:testimonials|reviews|customerQuotes)\s*(?::[^=]+)?=\s*\[/i,
     extensions: UI_AND_JS,
@@ -442,7 +442,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-fabricated-stats',
     title: 'Stock credibility statistics',
     severity: 'medium',
-    layer: 'copy',
+    layer: 'evidence',
+    tell: 'T-PLACEHOLDER-SOCIAL',
     scope: 'line',
     regex: /\b99\.9%(?:\s*uptime)?|\b24\/7\s+(?:support|customer|human)|\b4\.[89]\s*\/\s*5\b/i,
     extensions: UI,
@@ -462,7 +463,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-superlative-voice',
     title: 'Superlative-dense marketing voice',
     severity: 'low',
-    layer: 'copy',
+    layer: 'typography',
+    tell: 'T-VAGUE-COPY',
     scope: 'line',
     regex:
       /\b(?:supercharge[sd]?|revolutioniz\w+|game-?chang\w+|blazing[- ]fast|lightning[- ]fast|next-generation|best-in-class|cutting-edge|in seconds,? not (?:hours|days|weeks))\b|(?:It'?s|This is) not just (?:a|an)\s/i,
@@ -483,7 +485,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-template-closer',
     title: 'The "Ready to…?" closing pitch',
     severity: 'low',
-    layer: 'copy',
+    layer: 'typography',
+    tell: 'T-VAGUE-COPY',
     scope: 'line',
     regex:
       /Ready to (?:get started|level up|take (?:your|control)|streamline|ship|join|build|grow|scale)/i,
@@ -503,7 +506,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-emoji-ui',
     title: 'Emoji standing in for interface icons',
     severity: 'high',
-    layer: 'copy',
+    layer: 'typography',
+    tell: 'T-EMOJI-ICON',
     scope: 'line',
     // Excludes ©®™, arrows, and check marks — legitimate typography, not emoji.
     regex: /(?![©®™←-⇿✓✔✖✗])\p{Extended_Pictographic}/u,
@@ -524,7 +528,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-scaffold-meta',
     title: 'Scaffold title still shipping',
     severity: 'high',
-    layer: 'copy',
+    layer: 'evidence',
     scope: 'line',
     // Anchored to title/meta context so prose that merely mentions the
     // scaffold strings doesn't trip it.
@@ -546,7 +550,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-placeholder-comment',
     title: 'Placeholder comment documenting unfinished work',
     severity: 'medium',
-    layer: 'copy',
+    layer: 'evidence',
     scope: 'line',
     includeComments: true,
     regex:
@@ -567,7 +571,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-generation-narration',
     title: 'Section-narration comments in the markup',
     severity: 'low',
-    layer: 'copy',
+    layer: 'evidence',
     scope: 'line',
     includeComments: true,
     regex:
@@ -588,7 +592,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-social-stub',
     title: 'Social icon linking to a platform homepage',
     severity: 'medium',
-    layer: 'copy',
+    layer: 'evidence',
+    tell: 'T2-DEAD-SCAFFOLD',
     scope: 'line',
     regex:
       /href\s*=\s*["']https?:\/\/(?:www\.)?(?:twitter|x|github|linkedin|facebook|instagram|discord|youtube)\.(?:com|gg)\/?["']/,
@@ -608,7 +613,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-dead-link',
     title: 'Link that goes nowhere',
     severity: 'medium',
-    layer: 'copy',
+    layer: 'evidence',
+    tell: 'T2-DEAD-SCAFFOLD',
     scope: 'line',
     regex: /href\s*=\s*["']#?["']/,
     unless: /onClick|role\s*=\s*["']button/,
@@ -628,7 +634,8 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-placeholder-image',
     title: 'Placeholder image service in production',
     severity: 'medium',
-    layer: 'copy',
+    layer: 'evidence',
+    tell: 'T-PLACEHOLDER-SOCIAL',
     scope: 'line',
     regex:
       /via\.placeholder\.com|placehold\.co|placekitten\.com|dummyimage\.com|picsum\.photos|i\.pravatar\.cc|randomuser\.me|ui-avatars\.com|api\.dicebear\.com/i,
@@ -648,7 +655,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'copy-mechanism-label',
     title: 'Button named after the mechanism, not the outcome',
     severity: 'low',
-    layer: 'copy',
+    layer: 'typography',
     scope: 'line',
     regex: />\s*(?:Submit|Click here|Go|OK)\s*<\/(?:button|a)>/i,
     extensions: UI,
@@ -664,12 +671,35 @@ export const DESIGN_RULES: DesignRule[] = [
     verify: 'Every button label should answer "what happens when I press this?".',
   },
 
+  {
+    id: 'evidence-document-cosplay',
+    title: 'Reference numbers that refer to nothing',
+    severity: 'low',
+    layer: 'evidence',
+    tell: 'T2-DOCUMENT-COSPLAY',
+    scope: 'line',
+    regex: /\b(?:Form\s+[A-Z]{1,4}-\d{2,3}\b|Rev\.?\s+[A-Z][a-z]{2}\.?\s+\d{4}|Doc(?:ument)?\s+#?\d{3}\b)/,
+    extensions: UI,
+    maxFindings: 2,
+    vibeWeight: 0.5,
+    explanation:
+      'A form number or revision stamp with no document behind it is texture ' +
+      'imitating institutional history. It has become a signature of current ' +
+      'generated output precisely because it is a cheap way to make a page ' +
+      'feel considered.',
+    recommendation:
+      'Keep version stamps only where a real document or changelog backs ' +
+      'them. Delete the decorative ones.',
+    verify: 'Every reference number on the page should open a real document.',
+  },
+
   // ─────────────── Layer G: accessibility floor ───────────────
   {
     id: 'a11y-outline-suppressed',
     title: 'Focus outline removed without a replacement',
     severity: 'medium',
     layer: 'accessibility',
+    tell: 'T-NO-FOCUS',
     scope: 'line',
     regex: /\b(?:focus:)?outline-none\b|outline:\s*(?:none|0)\b/,
     unless: /focus:ring|focus-visible:|focus:border|focus:outline-|focus:shadow|focus-within:/,
@@ -692,6 +722,7 @@ export const DESIGN_RULES: DesignRule[] = [
     title: 'Click handler on a non-interactive element',
     severity: 'medium',
     layer: 'accessibility',
+    tell: 'T-DIV-BUTTON',
     scope: 'file',
     regex: /<(?:div|span|li|p)\b(?![^>]*\brole\s*=)[^>]*\bonClick\s*=/g,
     extensions: UI,
@@ -789,6 +820,7 @@ export const DESIGN_RULES: DesignRule[] = [
     title: 'Pinch-zoom disabled',
     severity: 'high',
     layer: 'accessibility',
+    tell: 'T-VIEWPORT-LOCK',
     scope: 'line',
     // Anchored to the meta content attribute / Next viewport export so a
     // sentence about the setting doesn't trip it.
@@ -811,7 +843,7 @@ export const DESIGN_RULES: DesignRule[] = [
     id: 'a11y-contrast-default-pair',
     title: 'Text and background too close in luminance',
     severity: 'medium',
-    layer: 'accessibility',
+    layer: 'color',
     scope: 'line',
     regex:
       /(?=.*\btext-(?:gray|slate|zinc|neutral|stone)-(?:200|300)\b)(?=.*\b(?:bg-white|bg-(?:gray|slate|zinc|neutral|stone)-(?:50|100))\b)|(?=.*\btext-white\b)(?=.*\bbg-(?:yellow|lime|amber|cyan)-(?:200|300|400)\b)/,
