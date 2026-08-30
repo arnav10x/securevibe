@@ -1,60 +1,16 @@
-// The dashboard's view-model: findings map to the right ring, signals
-// group correctly, and the readiness marker sits at the weaker axis.
+// The dashboard's view-model: exposure findings group into signals, the
+// readiness marker sits at the weaker axis, and the hover projection is
+// the deduction handed back.
 
 import { describe, expect, it } from 'vitest';
 import {
-  PANEL_ORDER,
+  EXPOSURE_PANEL,
   groupBySignal,
-  panelForFinding,
   projectedReadiness,
+  projectedStructureScore,
   readinessScore,
 } from '@/lib/report-view';
-
-describe('panelForFinding', () => {
-  it('sends every non-design check to exposure', () => {
-    for (const checkType of ['secret', 'platform_config', 'dependency', 'insecure_pattern']) {
-      expect(panelForFinding({ checkType, title: 'x' })).toBe('exposure');
-    }
-  });
-
-  it('maps rule ids to their dimensions', () => {
-    const cases: [string, string][] = [
-      ['tokens-multi-hue-gradient', 'color'],
-      ['tokens-no-theme-extension', 'system'],
-      ['states-no-error-boundary', 'states'],
-      ['type-below-floor', 'typography'],
-      ['copy-emoji-ui', 'typography'],
-      ['motion-transition-all', 'motion'],
-      ['layout-template-sequence', 'layout'],
-      ['copy-lorem', 'evidence'],
-      ['copy-dead-link', 'evidence'],
-      ['a11y-img-no-alt', 'accessibility'],
-      ['a11y-contrast-default-pair', 'color'],
-      ['evidence-contradiction', 'evidence'],
-    ];
-    for (const [ruleId, layer] of cases) {
-      expect(panelForFinding({ checkType: 'design', ruleId, title: 'x' })).toBe(layer);
-    }
-  });
-
-  it('falls back to title matching for rows saved before rule_id existed', () => {
-    expect(
-      panelForFinding({ checkType: 'design', title: '5 different corner radii' }),
-    ).toBe('system');
-    expect(
-      panelForFinding({ checkType: 'design', title: 'Lists render, but never the empty case' }),
-    ).toBe('states');
-    expect(
-      panelForFinding({ checkType: 'design', title: 'Page language never declared' }),
-    ).toBe('accessibility');
-  });
-
-  it('orders the rings by dimension with exposure last', () => {
-    expect(PANEL_ORDER[0].id).toBe('system');
-    expect(PANEL_ORDER[PANEL_ORDER.length - 1].id).toBe('exposure');
-    expect(PANEL_ORDER).toHaveLength(9);
-  });
-});
+import type { StructureSummary } from '@/lib/scanner/types';
 
 describe('groupBySignal', () => {
   const f = (over: Partial<{ ruleId: string; title: string; severity: string }>) => ({
@@ -85,51 +41,78 @@ describe('groupBySignal', () => {
 });
 
 describe('readinessScore', () => {
-  it('is the LOWER of craft and exposure, never an average', () => {
+  it('is the LOWER of structure and exposure, never an average', () => {
     expect(readinessScore(27, 76)).toBe(27);
     expect(readinessScore(90, 40)).toBe(40);
     expect(readinessScore(80, 80)).toBe(80);
   });
 });
 
-describe('projectedReadiness (the hover preview math)', () => {
-  const report = {
-    craftScore: 20,
-    securityScore: 76,
-    craftDetail: {
-      positives: [
-        { id: 'a', label: 'x', dimension: 'system', points: 10 },
-        { id: 'b', label: 'x', dimension: 'states', points: 8 },
-      ],
-      tells: ['T-EMOJI-ICON', 'T-NO-EMPTY'],
-      ceilings: [{ max: 70, reason: 'no empty states', dimension: 'states' }],
-      dimensionCaps: { typography: 8 },
+const structure: StructureSummary = {
+  applicable: true,
+  notApplicableReason: null,
+  score: 40,
+  band: 'The skeleton is the template',
+  deductions: [
+    {
+      signal: 'content-as-data',
+      name: 'Content-as-data arrays',
+      points: 16,
+      found: 'x',
+      why: 'y',
+      fixPrompt: 'z',
     },
-  };
+    {
+      signal: 'eyebrow-labels',
+      name: 'Eyebrow labels above headings',
+      points: 10,
+      found: 'x',
+      why: 'y',
+      fixPrompt: 'z',
+    },
+  ],
+  dialect: 'A',
+  dialectNote: null,
+  scriptMatch: { matched: 7, total: 10, sequence: [] },
+  pageFile: 'app/page.tsx',
+  percentile: { topPercent: 60, medianScore: 55, sampleSize: 30 },
+  percentileLine: 'Score 40.',
+};
 
-  it('fixing a dimension earns its full budget and drops its tells', () => {
-    const projected = projectedReadiness(report, 'states');
-    // states goes to 13, its tell (T-NO-EMPTY) leaves the density count,
-    // and the ceiling it owns lifts.
-    expect(projected).toBeGreaterThan(report.craftScore);
-    expect(projected).toBeLessThanOrEqual(76);
+describe('projectedStructureScore (the hover preview math)', () => {
+  it('hands the deduction back, capped at 100', () => {
+    expect(projectedStructureScore(structure, 'content-as-data')).toBe(56);
+    expect(projectedStructureScore(structure, 'eyebrow-labels')).toBe(50);
+    expect(projectedStructureScore({ ...structure, score: 95 }, 'content-as-data')).toBe(100);
   });
 
-  it('fixing exposure moves readiness to the craft score', () => {
-    expect(projectedReadiness(report, 'exposure')).toBe(20);
-    expect(
-      projectedReadiness({ ...report, craftScore: 90, securityScore: 40 }, 'exposure'),
-    ).toBe(90);
+  it('returns the score unchanged for an unknown signal', () => {
+    expect(projectedStructureScore(structure, 'nope')).toBe(40);
+  });
+});
+
+describe('projectedReadiness', () => {
+  const report = { craftScore: 40, securityScore: 76, structure };
+
+  it('fixing a signal moves readiness by its points', () => {
+    expect(projectedReadiness(report, 'content-as-data')).toBe(56);
   });
 
   it('never exceeds the other axis', () => {
-    const held = { ...report, securityScore: 25 };
-    expect(projectedReadiness(held, 'system')).toBeLessThanOrEqual(25);
+    const held = { ...report, securityScore: 45 };
+    expect(projectedReadiness(held, 'content-as-data')).toBe(45);
   });
 
-  it('degrades gracefully without stored detail', () => {
+  it('fixing exposure moves readiness to the structure score', () => {
+    expect(projectedReadiness(report, EXPOSURE_PANEL)).toBe(40);
     expect(
-      projectedReadiness({ craftScore: 30, securityScore: 80 }, 'system'),
+      projectedReadiness({ ...report, craftScore: 90, securityScore: 40 }, EXPOSURE_PANEL),
+    ).toBe(90);
+  });
+
+  it('degrades gracefully without a structure summary', () => {
+    expect(
+      projectedReadiness({ craftScore: 30, securityScore: 80 }, 'anything'),
     ).toBe(30);
   });
 });

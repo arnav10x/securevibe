@@ -4,7 +4,7 @@
 // field in a future refactor.
 
 import { describe, expect, it } from 'vitest';
-import { partitionFindings, type FindingRow } from '@/lib/teaser';
+import { partitionFindings, redactStats, type FindingRow } from '@/lib/teaser';
 import { parseClaimCookie } from '@/lib/anon';
 
 function row(overrides: Partial<FindingRow>): FindingRow {
@@ -76,6 +76,51 @@ describe('partitionFindings (the teaser seal)', () => {
     expect(tally).toEqual({ critical: 0, high: 0, medium: 0, low: 0 });
     expect(unlocked).toEqual([]);
     expect(locked).toEqual([]);
+  });
+});
+
+describe('redactStats seals the structure summary', () => {
+  const stats = {
+    filesScanned: 12,
+    report: {
+      craftScore: 40,
+      structure: {
+        applicable: true,
+        score: 40,
+        deductions: [
+          {
+            signal: 'social-proof',
+            name: 'Social proof structure',
+            points: 16,
+            found: 'the full citation with file paths',
+            why: 'the reasoning',
+            fixPrompt: 'the paid deliverable',
+            filePath: 'app/page.tsx',
+            evidence: 'testimonials[3]',
+          },
+        ],
+      },
+    },
+  };
+
+  it('keeps the ledger (name, points) and strips the detail', () => {
+    const redacted = redactStats(stats) as typeof stats;
+    const d = redacted.report.structure.deductions[0] as Record<string, unknown>;
+    expect(d.signal).toBe('social-proof');
+    expect(d.name).toBe('Social proof structure');
+    expect(d.points).toBe(16);
+    expect(d.found).toBeUndefined();
+    expect(d.why).toBeUndefined();
+    expect(d.fixPrompt).toBeUndefined();
+    expect(d.filePath).toBeUndefined();
+    expect(d.evidence).toBeUndefined();
+  });
+
+  it('leaves the original object untouched and passes through odd shapes', () => {
+    redactStats(stats);
+    expect(stats.report.structure.deductions[0].fixPrompt).toBe('the paid deliverable');
+    expect(redactStats({})).toEqual({});
+    expect(redactStats({ report: {} })).toEqual({ report: {} });
   });
 });
 

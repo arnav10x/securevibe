@@ -2,12 +2,22 @@
 // every user-facing string the scanner ships must pass it. The tool cannot
 // flag a superlative it uses itself, and it must never criticize a hue, a
 // typeface, or compare a repo to a named company's product.
+//
+// The structural grader composes its copy from templates plus evidence
+// from the scanned page. The templates are what we own, so the suite runs
+// the full vibe fixture (every signal firing at once, with neutral
+// evidence) and filters every found/why/fix-prompt line it produces.
 
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { voiceViolations } from '@/lib/scanner/voice';
-import { DESIGN_RULES } from '@/lib/scanner/rules/design-rules';
-import { assessCraft, assessSecurity, verdictFor } from '@/lib/scanner/grade';
+import { analyzeFixture } from './helpers';
+import { assessSecurity, buildReportCard, verdictFor, vibeVerdict } from '@/lib/scanner/grade';
 import { buildFixPrompt } from '@/lib/scanner/fix-prompt';
+import { dialectNote } from '@/lib/scanner/uiux/dialect';
+import { END_STATE_RULES, scoreBand, percentileLine, percentileFor } from '@/lib/scanner/uiux/score';
+
+const FIXTURES = path.join(__dirname, '..', 'fixtures');
 
 describe('the filter itself', () => {
   it('passes plain declarative prose', () => {
@@ -38,47 +48,85 @@ describe('the filter itself', () => {
   });
 });
 
-describe('every shipped rule passes the filter', () => {
-  for (const rule of DESIGN_RULES) {
-    it(`${rule.id}`, () => {
-      const text = [rule.title, rule.explanation, rule.recommendation, rule.verify ?? ''].join('. ');
-      expect(voiceViolations(text)).toEqual([]);
+describe('every emitted structural finding passes the filter', () => {
+  const report = analyzeFixture(path.join(FIXTURES, 'vibe-app'));
+
+  it('the fixture actually exercises the catalog', () => {
+    expect(report.findings.length).toBeGreaterThanOrEqual(12);
+  });
+
+  for (const field of ['name', 'found', 'why', 'fixPrompt'] as const) {
+    it(`filters every finding's ${field}`, () => {
+      for (const f of report.findings) {
+        // Quoted page evidence is the user's own text, not our voice; the
+        // fixture keeps it neutral so template violations still surface.
+        expect(voiceViolations(f[field]), `${f.signal} ${field}: ${f[field]}`).toEqual([]);
+      }
     });
   }
-});
 
-describe('verdict sentences pass the filter', () => {
-  it('all bands', () => {
-    const secure = assessSecurity([]);
-    const empty = assessCraft({ positives: [], tells: [], ceilings: [], dimensionCaps: {} });
-    for (const verdict of [
-      verdictFor(empty, secure, false, true),
-      verdictFor(empty, secure, true, true),
-      verdictFor(empty, secure, false, false),
-    ]) {
-      expect(voiceViolations(verdict)).toEqual([]);
+  it('filters the dialect note, band, and percentile line', () => {
+    expect(voiceViolations(report.dialectNote ?? '')).toEqual([]);
+    expect(voiceViolations(report.band)).toEqual([]);
+    expect(voiceViolations(report.percentileLine)).toEqual([]);
+    expect(voiceViolations(dialectNote('B') ?? '')).toEqual([]);
+    for (const score of [0, 30, 55, 75, 92]) {
+      expect(voiceViolations(scoreBand(score))).toEqual([]);
+      expect(voiceViolations(percentileLine(score, percentileFor(score)))).toEqual([]);
+    }
+  });
+
+  it('filters the professional end state', () => {
+    for (const rule of END_STATE_RULES) {
+      expect(voiceViolations(rule), rule).toEqual([]);
     }
   });
 });
 
-describe('fix prompts', () => {
+describe('verdict sentences pass the filter', () => {
+  it('all paths', () => {
+    const secure = assessSecurity([]);
+    const report = analyzeFixture(path.join(FIXTURES, 'vibe-app'));
+    const notApplicable = { ...report, applicable: false };
+    for (const verdict of [
+      verdictFor(report, secure, false),
+      verdictFor(report, secure, true),
+      verdictFor(notApplicable, secure, false),
+      verdictFor(report, { ...secure, score: 30 }, false),
+    ]) {
+      expect(voiceViolations(verdict)).toEqual([]);
+    }
+    for (const vibe of [0, 30, 60, 90]) {
+      expect(voiceViolations(vibeVerdict(vibe))).toEqual([]);
+    }
+  });
+
+  it('the assembled report card reads clean end to end', () => {
+    const structure = analyzeFixture(path.join(FIXTURES, 'vibe-app'));
+    const card = buildReportCard([], structure, { codeFilesScanned: 5 });
+    expect(voiceViolations(card.verdict)).toEqual([]);
+    for (const l of card.limitations) expect(voiceViolations(l)).toEqual([]);
+  });
+});
+
+describe('security fix prompts', () => {
   it('follow the 4.2 template with context, constraints, and a verify step', () => {
     const prompt = buildFixPrompt({
-      title: 'Focus outline removed without a replacement',
-      explanation: 'Keyboard users cannot see where they are.',
-      recommendation: 'Pair every outline-none with a visible ring.',
-      filePath: 'app/page.tsx',
+      title: 'A live key committed to code',
+      explanation: 'Anyone reading the repo can bill your account.',
+      recommendation: 'Rotate the key and move it to an environment variable.',
+      filePath: 'app/config.ts',
       lineStart: 12,
-      evidenceMasked: 'className="outline-none"',
-      verify: 'Tab through the page. Focus should be visible on every stop.',
+      evidenceMasked: 'const k = "sk_live_**"',
+      verify: 'Search the repo for the key prefix. Nothing should match.',
     });
     expect(prompt).toContain('CONTEXT');
-    expect(prompt).toContain('app/page.tsx (line 12)');
+    expect(prompt).toContain('app/config.ts (line 12)');
     expect(prompt).toContain('PROBLEM');
     expect(prompt).toContain('TASK');
     expect(prompt).toContain('CONSTRAINTS');
     expect(prompt).toContain('VERIFY');
-    expect(prompt).toContain('Tab through the page');
+    expect(prompt).toContain('Search the repo');
   });
 
   it('stays self-contained without a file path', () => {

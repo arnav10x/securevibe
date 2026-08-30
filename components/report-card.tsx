@@ -31,8 +31,9 @@ function gradeColor(grade: string): string {
 export function ReportCardPlate({ report }: { report: ReportCard }) {
   const severities: Severity[] = ['critical', 'high', 'medium', 'low'];
   const hasFindings = severities.some((s) => report.tally[s] > 0);
-  const noCraftSignal = report.insufficientSignal;
-  const worstLayer = report.categories[0];
+  const structure = report.structure;
+  const noCraftSignal = report.insufficientSignal || structure?.applicable === false;
+  const worstDeduction = structure?.deductions?.[0];
 
   return (
     <div className="plate overflow-hidden">
@@ -57,13 +58,13 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
             {noCraftSignal ? '—' : report.craftGrade}
           </span>
           <div>
-            <p className="label">Craft grade</p>
+            <p className="label">Structure grade</p>
             <p className="mono-tight mt-1.5 font-mono text-[11px] tabular-nums text-ink-soft">
               {noCraftSignal ? 'not enough to grade' : `${report.craftScore}/100`}
             </p>
-            {!noCraftSignal && worstLayer && (
+            {!noCraftSignal && worstDeduction && (
               <p className="mt-1 text-[12px] leading-snug text-ink-mute">
-                Weakest: {worstLayer.label.toLowerCase()}
+                Biggest deduction: {worstDeduction.name.toLowerCase()} (−{worstDeduction.points})
               </p>
             )}
           </div>
@@ -114,29 +115,21 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
         </div>
       </div>
 
-      {/* Why a grade is capped — the single most useful line when it applies.
-          Security caps come from proven findings; the craft cap is the
-          accessibility floor, stated rather than hidden in the number. */}
-      {(
-        [
-          ['Craft', report.craftCapReason],
-          ['Exposure', report.securityCapReason],
-        ] as const
-      )
-        .filter(([, reason]) => Boolean(reason))
-        .map(([which, reason]) => (
-          <div key={which} className="rule-hair px-6 py-3 sm:px-8">
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
-              <span
-                className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
-                style={{ background: 'var(--color-signal)' }}
-              >
-                {which} capped
-              </span>
-              <span>{reason}</span>
-            </p>
-          </div>
-        ))}
+      {/* Why the exposure grade is capped — the single most useful line
+          when it applies. Caps come from proven findings, SSL-Labs style. */}
+      {report.securityCapReason && (
+        <div className="rule-hair px-6 py-3 sm:px-8">
+          <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
+            <span
+              className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
+              style={{ background: 'var(--color-signal)' }}
+            >
+              Exposure capped
+            </span>
+            <span>{report.securityCapReason}</span>
+          </p>
+        </div>
+      )}
 
       {/* Insufficient-signal / clean honesty banner */}
       {(report.insufficientSignal || report.clean) && (
@@ -157,33 +150,40 @@ export function ReportCardPlate({ report }: { report: ReportCard }) {
         </div>
       )}
 
-      {/* The craft rundown — the seven layers, worst first. This is the
-          substance behind the headline grade, so it is labelled and sits
-          directly under it rather than reading as a footer. */}
-      <div className="rule-hair px-6 pt-4 sm:px-8">
-        <p className="label">Where the judgment shows</p>
-      </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-6 pb-4 pt-3 sm:grid-cols-4 sm:px-8">
-        {report.categories.map((cat) => (
-          <div key={cat.id}>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[12px] font-medium text-ink-soft">{cat.label}</span>
-              <span className="mono-tight font-mono text-[11px] tabular-nums text-ink">
-                {cat.score}
-              </span>
-            </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-well">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${Math.max(cat.score, 2)}%`,
-                  background: cat.score < 63 ? 'var(--color-signal)' : 'var(--color-ink)',
-                }}
-              />
-            </div>
+      {/* The deduction ledger — where the points went, largest first. This
+          is the substance behind the headline grade, so it is labelled and
+          sits directly under it rather than reading as a footer. */}
+      {structure?.applicable && structure.deductions.length > 0 && (
+        <>
+          <div className="rule-hair flex flex-wrap items-baseline justify-between gap-2 px-6 pt-4 sm:px-8">
+            <p className="label">Where the points went</p>
+            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+              100 − {100 - structure.score} = {structure.score}
+            </p>
           </div>
-        ))}
-      </div>
+          <ul className="flex flex-wrap gap-2 px-6 pb-4 pt-3 sm:px-8">
+            {structure.deductions.map((d) => (
+              <li
+                key={d.signal}
+                className="mono-tight flex items-baseline gap-1.5 rounded-full border border-[var(--line-strong)] px-2.5 py-1 font-mono text-[10.5px]"
+              >
+                <span
+                  className="font-semibold tabular-nums"
+                  style={{ color: d.points >= 8 ? 'var(--color-signal)' : 'var(--color-ink)' }}
+                >
+                  −{d.points}
+                </span>
+                <span className="text-ink-soft">{d.name}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {structure?.applicable && structure.percentileLine && (
+        <div className="rule-hair px-6 py-3 sm:px-8">
+          <p className="text-[12.5px] leading-relaxed text-ink-soft">{structure.percentileLine}</p>
+        </div>
+      )}
 
       {/* What a source scan cannot see — the honesty box */}
       <div className="rule-hair px-6 py-4 sm:px-8">
