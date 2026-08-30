@@ -63,24 +63,55 @@ export interface ScanStats {
   report?: ReportCard;
 }
 
-/** One graded layer of the craft audit, e.g. "Design tokens" or "State coverage". */
-export interface DesignCategoryScore {
-  id: string;
-  /** Display name, e.g. "State coverage" */
-  label: string;
-  /** 0–100, higher is better */
+/**
+ * One structural deduction, as stored in the report. Mirrors the spec's
+ * output block: name, points, what we found, why it reads as vibe coded,
+ * and the paste-ready fix prompt.
+ */
+export interface StructureDeduction {
+  signal: string;
+  name: string;
+  points: number;
+  found: string;
+  why: string;
+  fixPrompt: string;
+  filePath?: string;
+  lineStart?: number;
+  evidence?: string;
+}
+
+/**
+ * The UI/UX half of the report, per SECUREVIBE-GRADING.md: start at 100,
+ * subtract structural deductions, floor at 0. Prose quality, code
+ * quality, and color never move this number.
+ */
+export interface StructureSummary {
+  /** False when the repo has no marketing page; nothing is scored then. */
+  applicable: boolean;
+  notApplicableReason: string | null;
   score: number;
-  findingCount: number;
+  /** One-line reading of the score, e.g. "The skeleton is the template". */
+  band: string;
+  /** Deductions ordered largest first — the report's spine. */
+  deductions: StructureDeduction[];
+  /** Which AI dialect the paint belongs to. Reported, never deducted. */
+  dialect: 'A' | 'B' | null;
+  dialectNote: string | null;
+  scriptMatch: { matched: number; total: number; sequence: string[] };
+  pageFile: string | null;
+  percentile: { topPercent: number; medianScore: number; sampleSize: number };
+  percentileLine: string;
 }
 
 /**
  * The report card stored in scans.stats. Everything here is derived from
  * findings — deleting a finding and re-deriving would give the same card.
  *
- * Security and Craft are two INDEPENDENT grades. We never blend them: a
- * security tool must not hide a leaked key behind good typography, and it
- * must not punish a secure app for looking template-y. Craft is the headline
- * (it is the wedge); exposure is table stakes and a credibility anchor.
+ * Security and UI/UX are two INDEPENDENT grades. We never blend them: a
+ * security tool must not hide a leaked key behind a clean skeleton, and it
+ * must not punish a secure app for looking template-y. The structure score
+ * is the headline (it is the wedge); exposure is table stakes and a
+ * credibility anchor.
  */
 export interface ReportCard {
   // ── Exposure (table stakes, and the credibility anchor) ─────────────
@@ -114,58 +145,30 @@ export interface ReportCard {
   /** Honest, plain-English list of what a source scan cannot see. */
   limitations: string[];
 
-  // ── Craft (the headline — how much judgment shows after generation) ──
-  /** Craft letter grade. */
+  // ── UI/UX (the headline — does the skeleton read as the template?) ───
+  /** Letter grade for the structure score. "—" when not applicable. */
   craftGrade: string;
   /**
-   * 0–100 craft score, EARNED FROM ZERO per SECUREVIBE-UIUX.md: positive
-   * evidence earns dimension points, the lowest triggered ceiling bounds
-   * the total, and the tell-density multiplier applies last.
+   * 0–100 structure score per SECUREVIBE-GRADING.md: 100 minus the
+   * structural deductions, floored at 0. The full detail is in
+   * `structure`.
    */
   craftScore: number;
-  /** Band label for the score, e.g. "Generated, lightly edited". */
-  craftBand?: string;
-  /** Estimated percentile for the band, e.g. "Top 50%". */
-  craftPercentile?: string;
-  /** Positive signals that earned points — the "what you do well" section. */
-  positives?: { id: string; label: string; dimension: string; points: number; evidence?: string }[];
-  /** Distinct generic-default tells that fired, with the multiplier applied. */
-  tells?: string[];
-  tellMultiplier?: number;
-  /** Template / adapted / distinct, judged against the landing structure. */
-  categoryFit?: 'template' | 'adapted' | 'distinct' | null;
-  /**
-   * The full scoring input, kept so the UI can recompute projections
-   * ("fixing this dimension takes you to N") without guessing.
-   */
-  craftDetail?: {
-    positives: { id: string; label: string; dimension: string; points: number }[];
-    tells: string[];
-    ceilings: { max: number; reason: string; dimension: string }[];
-    dimensionCaps: Partial<Record<string, number>>;
-  };
-  /**
-   * When the accessibility floor caps the craft score, this says why.
-   * An interface keyboard users cannot operate is not well designed,
-   * whatever it looks like. null when nothing caps it.
-   */
-  craftCapReason: string | null;
+  /** The complete UI/UX grading detail. */
+  structure: StructureSummary;
   /**
    * The headline verdict: one plain sentence naming what the repo reads
-   * as, derived from the craft and security scores together. Never a
-   * bare number — a number invites argument, a sentence with cited
-   * findings under it does not.
+   * as. Never a bare number — a number invites argument, a sentence with
+   * cited findings under it does not.
    */
   verdict: string;
   /**
-   * 0–100: how strongly the project pattern-matches unedited AI-generated
-   * output. 0 reads human-crafted; 100 is a wall of template tells.
+   * 0–100: how strongly the page pattern-matches generated output. The
+   * structural deductions, read as a meter (100 − structure score).
    */
   vibeScore: number;
-  /** Plain-words reading of the vibe meter, e.g. "A few template tells". */
+  /** Plain-words reading of the vibe meter. */
   vibeVerdict: string;
-  /** Craft layers with individual scores, worst first. */
-  categories: DesignCategoryScore[];
   /**
    * Workflow markers found in the repo (agent instruction files, generator
    * fingerprints). Context only — they never move a score. Recorded because
@@ -219,17 +222,4 @@ export interface ScannerOptions {
   sourceType?: 'github' | 'zip';
   /** Turn off the network CVE lookup (OSV) — used by offline tests. */
   skipVulnerabilityLookup?: boolean;
-  /**
-   * Optional model-assisted detection (SECUREVIBE.md stage 5). OFF unless an
-   * API key is provided — the scanner is fully deterministic by default and
-   * never sends code anywhere. When enabled, only short visible-text
-   * excerpts (marketing copy) are sent, one named signal per call, and the
-   * model returns binary verdicts with citations — never scores.
-   */
-  llm?: {
-    apiKey: string;
-    /** OpenAI-compatible API root; defaults to Groq's free-tier endpoint. */
-    baseUrl?: string;
-    model?: string;
-  };
 }

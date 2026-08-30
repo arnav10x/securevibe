@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { checkSecretsInFile } from '@/lib/scanner/checks/secrets';
 import { checkCodePatternsInFile } from '@/lib/scanner/checks/code-patterns';
 import { checkPlatformConfigInFile } from '@/lib/scanner/checks/platform-config';
-import { DesignAnalyzer } from '@/lib/scanner/checks/design';
+
 import { assessSecurity } from '@/lib/scanner/grade';
 import type { Finding } from '@/lib/scanner/types';
 
@@ -133,74 +133,6 @@ describe('RLS policies: everyone versus every signed-in user', () => {
   });
 });
 
-describe('design: decoration, labels, and custom scales', () => {
-  function analyze(files: Record<string, string>) {
-    const d = new DesignAnalyzer();
-    for (const [p, c] of Object.entries(files)) d.addFile(p, c);
-    return d.finish();
-  }
-
-  it('ignores fixed size on an aria-hidden decorative shape', () => {
-    const audit = analyze({
-      'app/page.tsx':
-        '<div aria-hidden className="pointer-events-none absolute h-[680px] w-[680px]" />\n',
-    });
-    expect(ids(audit.findings)).not.toContain('layout-fixed-width');
-    expect(ids(audit.findings)).not.toContain('layout-fixed-height');
-  });
-
-  it('still flags a fixed width on a real content container', () => {
-    const audit = analyze({
-      'app/page.tsx': '<section className="w-[680px]">{children}</section>\n',
-    });
-    expect(ids(audit.findings)).toContain('layout-fixed-width');
-  });
-
-  it('ignores 10px on an uppercase tracked label', () => {
-    const audit = analyze({
-      'app/page.tsx': '<span className="uppercase tracking-[0.16em] text-[10px]">Scan</span>\n',
-    });
-    expect(ids(audit.findings)).not.toContain('type-below-floor');
-  });
-
-  it('ignores 10px on a label class the project CSS defines as tracked', () => {
-    const audit = analyze({
-      'app/globals.css': '.tag { text-transform: uppercase; letter-spacing: 0.12em; }\n',
-      'app/page.tsx': '<span className="tag text-[10px]">Preview</span>\n',
-    });
-    expect(ids(audit.findings)).not.toContain('type-below-floor');
-  });
-
-  it('still flags small untracked body text', () => {
-    const audit = analyze({
-      'app/page.tsx': '<p className="text-[10px] text-gray-500">Some readable prose here</p>\n',
-    });
-    expect(ids(audit.findings)).toContain('type-below-floor');
-  });
-
-  it('treats a size used across the project as a scale step, not a one-off', () => {
-    const many = Array.from(
-      { length: 6 },
-      (_, i) => [`app/p${i}.tsx`, `<p className="text-[15px]">line ${i}</p>\n`] as const,
-    );
-    const audit = analyze(Object.fromEntries(many));
-    expect(ids(audit.findings)).not.toContain('type-offscale-size');
-  });
-
-  it('still flags a genuinely one-off size', () => {
-    const audit = analyze({ 'app/page.tsx': '<p className="text-[13px]">once</p>\n' });
-    expect(ids(audit.findings)).toContain('type-offscale-size');
-  });
-
-  it('does not count a TODO that only appears inside rule prose', () => {
-    const audit = analyze({
-      'lib/rules.ts':
-        Array.from({ length: 8 }, () => "  explanation: 'A TODO marker means unfinished work here',\n").join(''),
-    });
-    expect(ids(audit.findings)).not.toContain('copy-todo-debris');
-  });
-});
-
 describe('grading keeps test fixtures out of the headline', () => {
   const planted = (path: string): Finding => ({
     checkType: 'secret',
@@ -229,43 +161,5 @@ describe('grading keeps test fixtures out of the headline', () => {
     expect(a.tally.critical).toBe(1);
     expect(a.testOnlyCount).toBe(0);
     expect(a.grade).toBe('F');
-  });
-});
-
-describe('mobile priority: column-mirroring versus real decisions', () => {
-  function analyze(files: Record<string, string>) {
-    const d = new DesignAnalyzer();
-    for (const [p, c] of Object.entries(files)) d.addFile(p, c);
-    return d.finish(2026);
-  }
-  const cols = '<div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">x</div>\n'.repeat(4);
-
-  it('fires when breakpoints only ever change column counts', () => {
-    const audit = analyze({
-      'app/a.tsx': cols,
-      'app/b.tsx': cols,
-      'app/c.tsx': cols,
-    });
-    expect(audit.findings.map((f) => f.ruleId)).toContain('layout-no-mobile-priority');
-    expect(audit.tells).toContain('T-NO-MOBILE-PRIORITY');
-  });
-
-  it('stays quiet when visibility or order varies by screen', () => {
-    const audit = analyze({
-      'app/a.tsx': cols,
-      'app/b.tsx': cols + '<aside className="hidden lg:block">detail</aside>\n<p className="order-2 md:order-1">first on desktop</p>\n<span className="md:hidden">compact</span>\n',
-      'app/c.tsx': cols,
-    });
-    expect(audit.findings.map((f) => f.ruleId)).not.toContain('layout-no-mobile-priority');
-    expect(audit.positives.map((p) => p.id)).toContain('P-MOBILE-PRIORITY');
-  });
-
-  it('leaves projects with no breakpoints to the no-responsive signal', () => {
-    const audit = analyze({
-      'app/a.tsx': '<div className="p-4">x</div>\n<div className="p-4">y</div>\n',
-      'app/b.tsx': '<div className="p-4">x</div>\n',
-      'app/c.tsx': '<div className="p-4">x</div>\n',
-    });
-    expect(audit.findings.map((f) => f.ruleId)).not.toContain('layout-no-mobile-priority');
   });
 });

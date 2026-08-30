@@ -1,5 +1,44 @@
 // Test helpers: a fake registry so dependency checks run fully offline
-// and deterministically.
+// and deterministically, plus a fixture loader for the structural grader.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { analyzeStructure, type SourceFile } from '@/lib/scanner/uiux';
+
+const TEXT_FILE = /\.(?:tsx|jsx|ts|js|mjs|astro|vue|svelte|html|css|scss|sass|less|json)$/;
+
+/** Read a fixture directory into the shapes analyzeStructure takes. */
+export function loadFixture(dir: string): { sources: SourceFile[]; allPaths: string[] } {
+  const sources: SourceFile[] = [];
+  const allPaths: string[] = [];
+  const walk = (abs: string, rel: string): void => {
+    for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+      const absChild = path.join(abs, entry.name);
+      const relChild = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(absChild, relChild);
+      else {
+        allPaths.push(relChild);
+        if (TEXT_FILE.test(relChild)) {
+          sources.push({ relPath: relChild, content: fs.readFileSync(absChild, 'utf8') });
+        }
+      }
+    }
+  };
+  walk(dir, '');
+  return { sources, allPaths };
+}
+
+/** Run the structural grader over a fixture directory. */
+export function analyzeFixture(dir: string, nowYear = 2026) {
+  const { sources, allPaths } = loadFixture(dir);
+  return analyzeStructure(sources, allPaths, { nowYear });
+}
+
+/** Run the structural grader over inline files (paths -> contents). */
+export function analyzeFiles(files: Record<string, string>, nowYear = 2026) {
+  const sources = Object.entries(files).map(([relPath, content]) => ({ relPath, content }));
+  return analyzeStructure(sources, Object.keys(files), { nowYear });
+}
 
 const KNOWN_NPM: Record<string, { created: string; downloads: number }> = {
   react: { created: '2011-10-26T17:46:21.942Z', downloads: 25_000_000 },

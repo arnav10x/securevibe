@@ -6,7 +6,6 @@
 import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
 import { buildFixPrompt } from '@/lib/scanner/fix-prompt';
-import { DESIGN_RULES } from '@/lib/scanner/rules/design-rules';
 
 export const SEVERITY_COLOR: Record<string, string> = {
   critical: 'var(--color-critical)',
@@ -40,13 +39,13 @@ const CONFIDENCE_LABEL: Record<string, { label: string; title: string }> = {
 
 /**
  * A ready-to-paste prompt for the user's AI coding tool — the way a
- * non-technical founder actually fixes things. Follows the template from
- * SECUREVIBE.md 4.2: context, problem, bounded task, constraints, and a
- * verify step. Rules that define their own verification step get it; the
- * rest fall back to a generic check.
+ * non-technical founder actually fixes things. Structural (design)
+ * findings carry their prompt as the recommendation, pre-filled from the
+ * SECUREVIBE-GRADING.md templates; everything else gets the SECUREVIBE.md
+ * 4.2 wrapper: context, problem, bounded task, constraints, verify.
  */
 export function fixPrompt(f: FindingView): string {
-  const rule = DESIGN_RULES.find((r) => r.title === f.title);
+  if (f.checkType === 'design') return f.recommendation;
   return buildFixPrompt({
     title: f.title,
     explanation: f.explanation,
@@ -54,7 +53,6 @@ export function fixPrompt(f: FindingView): string {
     filePath: f.filePath,
     lineStart: f.lineStart,
     evidenceMasked: f.evidenceMasked,
-    verify: rule?.verify ?? null,
   });
 }
 

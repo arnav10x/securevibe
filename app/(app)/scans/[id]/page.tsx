@@ -29,7 +29,7 @@ const CHECK_LABELS: Record<string, string> = {
   platform_config: 'Config',
   dependency: 'Deps',
   insecure_pattern: 'Code',
-  design: 'Craft',
+  design: 'UI/UX',
 };
 
 interface Finding {
@@ -88,16 +88,16 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
   };
   const inFlight = scan.status === 'queued' || scan.status === 'running';
 
-  // Scans graded before the seven-layer engine store a report the dashboard
-  // cannot faithfully render (different categories, no craft score). They
-  // keep the plain findings list plus a rescan nudge instead of a meter
-  // full of dashes.
+  // Scans graded before the structural engine store a report the dashboard
+  // cannot faithfully render (no deduction ledger). They keep the plain
+  // findings list plus a rescan nudge instead of a meter full of dashes.
   const report = stats.report;
   const modernReport =
     !!report &&
     typeof report.craftScore === 'number' &&
     typeof report.verdict === 'string' &&
-    Array.isArray(report.categories);
+    !!report.structure &&
+    Array.isArray(report.structure.deductions);
 
   return (
     <div>
@@ -117,7 +117,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
       <div className="plate relative px-5 py-5 sm:px-7 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="label">Craft &amp; exposure report</p>
+            <p className="label">Structure &amp; exposure report</p>
             <h1 className="mt-3 flex min-w-0 items-center gap-2.5">
               <span className="shrink-0 text-ink-mute">
                 {scan.source_type === 'github' ? (
@@ -196,8 +196,8 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
         {scan.status === 'completed' && !modernReport && all.length > 0 && (
           <Alert tone="info">
             This scan predates the current report. The findings below are still
-            valid — rescan the repo to get the full dashboard with craft layers
-            and the distance-to-production meter.
+            valid — rescan the repo to get the full dashboard with the deduction
+            ledger and the distance-to-production meter.
           </Alert>
         )}
 
@@ -208,7 +208,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
               <span className="tag tag--safe text-base">Clear · no findings</span>
             </StampIn>
             <p className="prose-serif mx-auto mt-6 max-w-lg text-[15px] text-ink-soft">
-              Nothing flagged across the seven craft layers or the exposure checks. That is
+              Nothing flagged by the structural signals or the exposure checks. That is
               a good sign, not a guarantee: a static scan cannot see your running app, and it
               cannot judge what a page looks like once it renders.
             </p>

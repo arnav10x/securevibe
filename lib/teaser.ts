@@ -52,6 +52,34 @@ export interface FindingRow {
 }
 
 /**
+ * The structure summary rides inside stats.report and carries every
+ * finding's full text, so the anonymous view must redact it the same way
+ * findings are gated: the deduction ledger (name and points) stays
+ * visible as the taste, the found/why/fix-prompt detail does not.
+ * Pure so the seal is unit-testable.
+ */
+export function redactStats(stats: Record<string, unknown>): Record<string, unknown> {
+  const report = stats.report as
+    | { structure?: { deductions?: Record<string, unknown>[] } }
+    | undefined;
+  if (!report?.structure?.deductions) return stats;
+  return {
+    ...stats,
+    report: {
+      ...report,
+      structure: {
+        ...report.structure,
+        deductions: report.structure.deductions.map((d) => ({
+          signal: d.signal,
+          name: d.name,
+          points: d.points,
+        })),
+      },
+    },
+  };
+}
+
+/**
  * The gate itself, as a pure function: split findings into the open
  * (medium/low, full detail) and the sealed (critical/high, severity and
  * check type ONLY — no other key survives). Unit-tested in
@@ -122,7 +150,7 @@ export async function getPublicScan(id: string): Promise<PublicScan | null> {
     sourceRef: scan.source_ref,
     sourceType: scan.source_type,
     errorMessage: scan.error_message,
-    stats: (scan.stats ?? {}) as Record<string, unknown>,
+    stats: redactStats((scan.stats ?? {}) as Record<string, unknown>),
     sourceDeletedAt: scan.source_deleted_at,
     createdAt: scan.created_at,
     tally,

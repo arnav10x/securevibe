@@ -8,29 +8,26 @@
 //   other element is deliberately quieter, because emphasis is zero-sum —
 //   "discriminability requires suppression, not addition."
 //
-//   Red has ONE job (2.10): defect severity. Weak scores and severity
+//   Red has ONE job (2.10): points being lost. Deductions and severity
 //   marks are red; nothing decorative is. When something on this page is
-//   red, it needs fixing.
-//
-//   The healthy recede so the broken advance (Von Restorff, 3.4): rings
-//   with nothing to show sit at low opacity; rings with findings hold
-//   full contrast; the weakest carries the only color.
+//   red, it costs.
 //
 //   Proximity does the grouping (2.2): tight gaps inside a card, wide
 //   gaps between cards, so the verdict band and the work area read as
 //   two thoughts, not five widgets.
 //
-// Structure: verdict + readiness track, then eight equal rings (seven
-// craft layers + exposure) opening a master-detail panel where findings
-// group by signal, then occurrence.
+// Structure per SECUREVIBE-GRADING.md section 6: deductions ordered
+// largest first, each with what we found, why it reads as vibe coded,
+// and a paste-ready fix prompt. Then the dialect line, the percentile
+// line, and the professional end state.
 
 import { useMemo, useState } from 'react';
-import type { ReportCard } from '@/lib/scanner/types';
+import type { ReportCard, StructureDeduction } from '@/lib/scanner/types';
 import { isTestPath } from '@/lib/scanner/util';
+import { END_STATE_RULES } from '@/lib/scanner/uiux/score';
 import {
-  PANEL_ORDER,
+  EXPOSURE_PANEL,
   groupBySignal,
-  panelForFinding,
   projectedReadiness,
   readinessScore,
   type PanelId,
@@ -39,15 +36,13 @@ import {
 import { SeverityBadge } from '@/components/ui';
 import { IconChevronDown } from '@/components/icons';
 import { fixPrompt, SEVERITY_COLOR, type FindingView } from '@/components/findings';
-import { buildSectionPrompt } from '@/lib/scanner/section-prompt';
 import { GuillocheField } from '@/components/guilloche';
 
-/** Red means "needs fixing" and nothing else. */
+/** Red means "costing you points" and nothing else. */
 const WEAK = 63;
 function scoreColor(score: number): string {
   return score < WEAK ? 'var(--color-signal)' : 'var(--color-ink)';
 }
-
 
 function FlagIcon({ className }: { className?: string }) {
   return (
@@ -65,9 +60,10 @@ function VerdictCard({
   preview,
 }: {
   report: ReportCard;
-  /** Projected readiness while a gauge is hovered; null when idle. */
+  /** Projected readiness while a row is hovered; null when idle. */
   preview: number | null;
 }) {
+  const structure = report.structure;
   const craft = report.craftScore;
   const exposure = report.securityScore;
   const ready = readinessScore(craft, exposure);
@@ -76,19 +72,14 @@ function VerdictCard({
   const gain = preview !== null && preview > ready ? preview - ready : 0;
 
   const chips: { label: string; strong?: boolean }[] = [];
-  if (report.craftPercentile) chips.push({ label: report.craftPercentile, strong: true });
-  if (report.categoryFit) {
-    chips.push({
-      label:
-        report.categoryFit === 'template'
-          ? 'Structure: the category template'
-          : report.categoryFit === 'adapted'
-            ? 'Structure: adapted'
-            : 'Structure: its own',
-    });
-  }
-  if (typeof report.tellMultiplier === 'number' && report.tellMultiplier < 1) {
-    chips.push({ label: `Tell density \u00d7${report.tellMultiplier.toFixed(2)}` });
+  if (structure?.applicable) {
+    chips.push({ label: `Top ${structure.percentile.topPercent}%`, strong: true });
+    if (structure.scriptMatch.matched > 0) {
+      chips.push({
+        label: `Template script ${structure.scriptMatch.matched}/${structure.scriptMatch.total}`,
+      });
+    }
+    if (structure.dialect) chips.push({ label: `Dialect ${structure.dialect}` });
   }
 
   return (
@@ -103,106 +94,103 @@ function VerdictCard({
       />
 
       <div className="relative">
-      <p className="label">Verdict</p>
+        <p className="label">Verdict</p>
 
-      {/* The one focal element on the page. */}
-      {report.verdict && (
-        <p className="prose-serif mt-2.5 max-w-3xl text-[19px] leading-snug text-ink sm:text-[22px]">
-          {report.verdict}
-        </p>
-      )}
+        {/* The one focal element on the page. */}
+        {report.verdict && (
+          <p className="prose-serif mt-2.5 max-w-3xl text-[19px] leading-snug text-ink sm:text-[22px]">
+            {report.verdict}
+          </p>
+        )}
 
-      {chips.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {chips.map((c) => (
-            <span
-              key={c.label}
-              className={`mono-tight rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${
-                c.strong
-                  ? 'border-ink bg-ink text-paper'
-                  : 'border-[var(--line-strong)] text-ink-soft'
-              }`}
-            >
-              {c.label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* The evidence line: quiet, single-voice. */}
-      <div className="mt-7 flex items-center gap-5 sm:gap-7">
-        <p className="shrink-0">
-          <span className="display text-3xl leading-none tabular-nums text-ink">{ready}</span>
-          <span className="display ml-0.5 text-lg text-ink-mute">%</span>
-        </p>
-
-        <div className="relative min-w-0 flex-1">
-          {/* A progress bar, not a number line: a recessed track with a
-              solid fill. On gauge hover, a ghost segment shows how far the
-              bar advances once that layer is fixed. */}
-          <div className="relative h-2.5 rounded-full bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-ink transition-[width] duration-200 ease-out motion-reduce:transition-none"
-              style={{ width: `${ready}%` }}
-            />
-            {gain > 0 && (
-              <div
-                className="absolute inset-y-0 rounded-r-full bg-ink/25 transition-[width,left] duration-200 ease-out motion-reduce:transition-none"
-                style={{ left: `${ready}%`, width: `${gain}%` }}
-              />
-            )}
-
-            {/* You are here: the lower score, the only chip. */}
-            <div
-              className="absolute bottom-full mb-1.5 -translate-x-1/2"
-              style={{ left: `${clamp(ready)}%` }}
-            >
-              <div className="flex flex-col items-center">
-                <span className="mono-tight whitespace-nowrap rounded bg-ink px-1.5 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-paper">
-                  {craftIsLower ? 'Craft' : 'Exposure'} {ready}%
-                </span>
-                <span className="h-1.5 w-px bg-ink" aria-hidden />
-              </div>
-            </div>
-
-            {/* The projected gain, while hovering a gauge. */}
-            {gain >= 4 && preview !== null && (
+        {chips.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {chips.map((c) => (
               <span
-                className="mono-tight absolute bottom-full mb-2 -translate-x-1/2 whitespace-nowrap font-mono text-[9.5px] font-semibold tabular-nums text-ink-soft"
-                style={{ left: `${clamp(preview)}%` }}
+                key={c.label}
+                className={`mono-tight rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                  c.strong
+                    ? 'border-ink bg-ink text-paper'
+                    : 'border-[var(--line-strong)] text-ink-soft'
+                }`}
               >
-                +{gain}%
+                {c.label}
               </span>
-            )}
+            ))}
+          </div>
+        )}
 
-            {/* The other axis: a tick, not a competitor. */}
-            <div
-              className="absolute top-full mt-1.5 -translate-x-1/2"
-              style={{ left: `${clamp(craftIsLower ? exposure : craft)}%` }}
-            >
-              <div className="flex flex-col items-center">
-                <span className="h-1.5 w-px bg-[var(--line-strong)]" aria-hidden />
-                <span className="mono-tight whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.1em] text-ink-mute">
-                  {craftIsLower ? 'Exposure' : 'Craft'} {craftIsLower ? exposure : craft}%
-                </span>
+        {/* The evidence line: quiet, single-voice. */}
+        <div className="mt-7 flex items-center gap-5 sm:gap-7">
+          <p className="shrink-0">
+            <span className="display text-3xl leading-none tabular-nums text-ink">{ready}</span>
+            <span className="display ml-0.5 text-lg text-ink-mute">%</span>
+          </p>
+
+          <div className="relative min-w-0 flex-1">
+            <div className="relative h-2.5 rounded-full bg-well shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full bg-ink transition-[width] duration-200 ease-out motion-reduce:transition-none"
+                style={{ width: `${ready}%` }}
+              />
+              {gain > 0 && (
+                <div
+                  className="absolute inset-y-0 rounded-r-full bg-ink/25 transition-[width,left] duration-200 ease-out motion-reduce:transition-none"
+                  style={{ left: `${ready}%`, width: `${gain}%` }}
+                />
+              )}
+
+              {/* You are here: the lower score, the only chip. */}
+              <div
+                className="absolute bottom-full mb-1.5 -translate-x-1/2"
+                style={{ left: `${clamp(ready)}%` }}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="mono-tight whitespace-nowrap rounded bg-ink px-1.5 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-paper">
+                    {craftIsLower ? 'Structure' : 'Exposure'} {ready}%
+                  </span>
+                  <span className="h-1.5 w-px bg-ink" aria-hidden />
+                </div>
               </div>
-            </div>
 
-            <FlagIcon className="absolute -right-1 bottom-full mb-1.5 h-3.5 w-3.5 text-ink-mute" />
+              {/* The projected gain, while hovering a row. */}
+              {gain >= 4 && preview !== null && (
+                <span
+                  className="mono-tight absolute bottom-full mb-2 -translate-x-1/2 whitespace-nowrap font-mono text-[9.5px] font-semibold tabular-nums text-ink-soft"
+                  style={{ left: `${clamp(preview)}%` }}
+                >
+                  +{gain}%
+                </span>
+              )}
+
+              {/* The other axis: a tick, not a competitor. */}
+              <div
+                className="absolute top-full mt-1.5 -translate-x-1/2"
+                style={{ left: `${clamp(craftIsLower ? exposure : craft)}%` }}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="h-1.5 w-px bg-[var(--line-strong)]" aria-hidden />
+                  <span className="mono-tight whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.1em] text-ink-mute">
+                    {craftIsLower ? 'Exposure' : 'Structure'} {craftIsLower ? exposure : craft}%
+                  </span>
+                </div>
+              </div>
+
+              <FlagIcon className="absolute -right-1 bottom-full mb-1.5 h-3.5 w-3.5 text-ink-mute" />
+            </div>
           </div>
         </div>
-      </div>
 
-      <p className="mt-4 text-[12px] leading-relaxed text-ink-mute sm:mt-3">
-        Distance to production, set by the lower axis — never an average. Hover a meter to
-        preview the gain from fixing that dimension.
-      </p>
+        <p className="mt-4 text-[12px] leading-relaxed text-ink-mute sm:mt-3">
+          Distance to production, set by the lower axis — never an average. Hover a finding to
+          preview the points it returns.
+        </p>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────── rings ─────────────────────────────────
+// ─────────────── the exposure gauge (unchanged mechanics) ──────────────
 
 function Gauge({ score, small = false }: { score: number | null; small?: boolean }) {
   const R = 30;
@@ -245,19 +233,10 @@ function Gauge({ score, small = false }: { score: number | null; small?: boolean
   );
 }
 
-// ─────────────── the whole-section fix prompt ──────────────────────────
+// ─────────────── copy-to-clipboard for a fix prompt ────────────────────
 
-function SectionPrompt({ section, hint, groups }: {
-  section: string;
-  hint: string;
-  groups: { title: string; count: number; findings: FindingView[] }[];
-}) {
+function CopyPrompt({ prompt }: { prompt: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle');
-  const prompt = useMemo(
-    () => buildSectionPrompt({ section, hint, groups }),
-    [section, hint, groups],
-  );
-
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -269,13 +248,11 @@ function SectionPrompt({ section, hint, groups }: {
       setState('manual');
     }
   };
-
   return (
     <div className="mt-3 rounded-xl border border-[var(--line)] bg-sheet">
       <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5">
         <p className="text-[12.5px] leading-snug text-ink-soft">
-          <span className="font-semibold text-ink">Fix this whole section</span> with one
-          prompt for your coding agent.
+          <span className="font-semibold text-ink">Fix prompt</span> — paste into your AI tool.
         </p>
         <button
           type="button"
@@ -285,21 +262,88 @@ function SectionPrompt({ section, hint, groups }: {
           {state === 'copied' ? 'Copied' : 'Copy prompt'}
         </button>
       </div>
-      <details open={state === 'manual'} className="border-t border-[var(--line)]">
-        <summary className="mono-tight cursor-pointer select-none px-3.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute hover:text-ink [&::-webkit-details-marker]:hidden [&::marker]:content-none">
-          {state === 'manual' ? 'Copy blocked. Select the text below' : 'Preview the prompt'}
-        </summary>
-        <div className="px-3.5 pb-3">
-          <pre className="readout w-0 min-w-full overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-soft">
-            {prompt}
-          </pre>
-        </div>
-      </details>
+      <div className="border-t border-[var(--line)] px-3.5 py-3">
+        {state === 'manual' && (
+          <p className="mono-tight mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute">
+            Copy blocked. Select the text below
+          </p>
+        )}
+        <pre className="readout w-0 min-w-full overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-soft">
+          {prompt}
+        </pre>
+      </div>
     </div>
   );
 }
 
-// ──────────────────────── one signal, expandable ───────────────────────
+// ─────────────── one structural deduction, in the spec's format ────────
+
+function DeductionDetail({
+  deduction,
+  projected,
+  score,
+}: {
+  deduction: StructureDeduction;
+  projected: number | null;
+  score: number;
+}) {
+  return (
+    <div className="px-4 py-5 sm:px-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div>
+          <h2 className="text-[16px] font-semibold tracking-tight text-ink">
+            {deduction.name}
+            <span
+              className="mono-tight ml-2.5 align-middle font-mono text-[12px] font-semibold tabular-nums"
+              style={{ color: 'var(--color-signal)' }}
+            >
+              −{deduction.points} points
+            </span>
+          </h2>
+          {projected !== null && projected > score && (
+            <p className="mt-0.5 text-[12.5px] text-ink-mute">
+              Fixing this takes the structure score from {score} to {projected}.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {deduction.filePath && (
+        <p className="mono-tight mt-3 break-all font-mono text-xs text-ink-mute">
+          {deduction.filePath}
+          {deduction.lineStart ? `:${deduction.lineStart}` : ''}
+        </p>
+      )}
+      {deduction.evidence && (
+        <pre className="readout mt-2.5 w-0 min-w-full overflow-x-auto px-4 py-2.5 font-mono text-xs leading-relaxed text-ink-soft">
+          {deduction.evidence}
+        </pre>
+      )}
+
+      <div className="mt-4 space-y-4 text-sm leading-relaxed">
+        <div
+          className="border-l-2 pl-4"
+          style={{ borderColor: 'color-mix(in srgb, var(--color-signal) 60%, transparent)' }}
+        >
+          <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--color-signal)' }}>
+            What we found
+          </p>
+          <p className="prose-serif text-[14.5px] text-ink-soft">{deduction.found}</p>
+        </div>
+        <div className="border-l-2 border-[var(--line-strong)] pl-4">
+          <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-mute">
+            Why it reads as vibe coded
+          </p>
+          <p className="prose-serif text-[14.5px] text-ink-soft">{deduction.why}</p>
+        </div>
+      </div>
+
+      <CopyPrompt prompt={deduction.fixPrompt} />
+    </div>
+  );
+}
+
+// ─────────────── exposure occurrences (unchanged mechanics) ────────────
 
 function Occurrence({ f }: { f: FindingView }) {
   const color = SEVERITY_COLOR[f.severity] ?? SEVERITY_COLOR.low;
@@ -401,42 +445,30 @@ export function ScanDashboard({
   report: ReportCard;
   findings: FindingView[];
 }) {
-  const { byPanel, testOnly } = useMemo(() => {
-    const byPanel = new Map<PanelId, FindingView[]>(PANEL_ORDER.map((p) => [p.id, []]));
+  const structure = report.structure;
+  const deductions = structure?.applicable ? structure.deductions : [];
+
+  const { exposureFindings, testOnly } = useMemo(() => {
+    const exposureFindings: FindingView[] = [];
     const testOnly: FindingView[] = [];
     for (const f of findings) {
-      if (f.filePath && isTestPath(f.filePath)) {
-        testOnly.push(f);
-        continue;
-      }
-      byPanel.get(panelForFinding(f))!.push(f);
+      if (f.checkType === 'design') continue; // rendered from the structure summary
+      if (f.filePath && isTestPath(f.filePath)) testOnly.push(f);
+      else exposureFindings.push(f);
     }
-    return { byPanel, testOnly };
+    return { exposureFindings, testOnly };
   }, [findings]);
 
-  const scoreFor = (id: PanelId): number | null => {
-    if (report.insufficientSignal) return null;
-    if (id === 'exposure') return report.securityScore;
-    return report.categories.find((c) => c.id === id)?.score ?? null;
-  };
-
-  // Start on the layer that needs the most attention: lowest score among
-  // layers that actually have findings.
-  const [active, setActive] = useState<PanelId>(() => {
-    const withFindings = PANEL_ORDER.filter((p) => (byPanel.get(p.id)?.length ?? 0) > 0);
-    if (withFindings.length === 0) return PANEL_ORDER[0].id;
-    return withFindings.reduce((worst, p) =>
-      (scoreFor(p.id) ?? 100) < (scoreFor(worst.id) ?? 100) ? p : worst,
-    ).id;
-  });
-
-  // Hovering (or keyboard-focusing) a gauge previews the readiness gain
-  // from fixing that layer, as a ghost segment on the progress bar.
+  // Start on the largest deduction; exposure when there are none.
+  const [active, setActive] = useState<PanelId>(() =>
+    deductions.length > 0 ? deductions[0].signal : EXPOSURE_PANEL,
+  );
   const [hovered, setHovered] = useState<PanelId | null>(null);
+
   const ready = readinessScore(report.craftScore, report.securityScore);
   const projectFor = (id: PanelId): number | null => {
     if (report.insufficientSignal) return null;
-    if ((byPanel.get(id)?.length ?? 0) === 0) return null; // nothing to fix
+    if (id === EXPOSURE_PANEL && exposureFindings.length === 0) return null;
     return projectedReadiness(report, id);
   };
   const preview = hovered ? projectFor(hovered) : null;
@@ -450,11 +482,12 @@ export function ScanDashboard({
     }
   };
 
-  const activeMeta = PANEL_ORDER.find((p) => p.id === active)!;
-  const activeFindings = byPanel.get(active) ?? [];
-  const groups = groupBySignal(activeFindings);
-  const capReason = active === 'exposure' ? report.securityCapReason : report.craftCapReason;
-  const activeProjected = projectFor(active);
+  const activeDeduction = deductions.find((d) => d.signal === active) ?? null;
+  const exposureGroups = groupBySignal(exposureFindings);
+  const activeProjectedStructure =
+    activeDeduction && structure
+      ? Math.min(100, structure.score + activeDeduction.points)
+      : null;
 
   return (
     <div className="space-y-5">
@@ -463,234 +496,293 @@ export function ScanDashboard({
         <VerdictCard report={report} preview={preview} />
       </section>
 
-      {/* 2 ── master-detail: a sticky rail of meters beside the reading
-          pane, so choosing a dimension and reading its findings never
-          requires scrolling apart. On small screens the rail is the 3-up
-          gauge grid above the pane, as before. */}
-      <div className="space-y-5 lg:grid lg:grid-cols-[290px_minmax(0,1fr)] lg:items-start lg:gap-5 lg:space-y-0">
-      {/* .plate pins position:relative in globals, which beats the layered
-          sticky utility — so the sticky wrapper is a bare div. */}
-      <div className="sticky top-14 z-30 lg:top-24">
-      <section className="plate overflow-hidden">
-        <div className="hidden flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6 lg:flex">
-          <p className="label">Where the judgment shows</p>
-        </div>
-
-        {/* On phones the meters are ONE swipeable row, pinned under the
-            header, so the selector never scrolls away and the page loses
-            two rows of height. Tapping a meter jumps to its findings. */}
-        <div
-          className="flex w-0 min-w-full snap-x overflow-x-auto lg:hidden"
-          role="tablist"
-          aria-label="Report areas"
-        >
-          {PANEL_ORDER.map((p) => {
-            const count = byPanel.get(p.id)?.length ?? 0;
-            const isActive = active === p.id;
-            const score = scoreFor(p.id);
-            const clear = count === 0;
-            const healthy = clear && (score === null || score >= WEAK);
-            return (
-              <button
-                key={p.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                title={p.hint}
-                onClick={() => selectPanel(p.id)}
-                className={`flex w-[92px] shrink-0 snap-start cursor-pointer flex-col items-center gap-1 border-r border-[var(--line)] px-2 pb-2.5 pt-3 transition-colors last:border-r-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
-                  isActive ? 'bg-well' : ''
-                } ${healthy && !isActive ? 'opacity-45' : ''}`}
-                style={isActive ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
-              >
-                <Gauge score={score} small />
-                <span className="w-full truncate text-center text-[10.5px] font-semibold leading-tight tracking-tight text-ink">
-                  {p.label}
-                </span>
-                <span className="mono-tight font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
-                  {healthy ? 'clear' : clear ? 'unproven' : count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* The same nine meters as compact rows: always in view while the
-            findings scroll, so switching dimensions is one click, not a
-            round trip. */}
-        <div className="hidden lg:block" role="tablist" aria-label="Report areas">
-          {PANEL_ORDER.map((p) => {
-            const count = byPanel.get(p.id)?.length ?? 0;
-            const isActive = active === p.id;
-            const score = scoreFor(p.id);
-            const clear = count === 0;
-            const healthy = clear && (score === null || score >= WEAK);
-            const rowProjection = hovered === p.id && !clear ? projectFor(p.id) : null;
-            const ready = readinessScore(report.craftScore, report.securityScore);
-            return (
-              <button
-                key={p.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                title={p.hint}
-                onClick={() => selectPanel(p.id)}
-                onMouseEnter={() => setHovered(p.id)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(p.id)}
-                onBlur={() => setHovered(null)}
-                className={`flex w-full cursor-pointer items-center gap-3 border-b border-[var(--line)] px-4 py-2.5 text-left transition-colors last:border-b-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
-                  isActive ? 'bg-well' : 'hover:bg-sheet'
-                } ${healthy && !isActive ? 'opacity-45 hover:opacity-90' : ''}`}
-                style={isActive ? { boxShadow: 'inset 3px 0 0 var(--color-ink)' } : undefined}
-              >
-                <Gauge score={score} small />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
-                    {p.label}
-                  </span>
-                  <span className="mono-tight block font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-mute">
-                    {healthy ? 'clear' : clear ? 'no evidence yet' : `${count} finding${count === 1 ? '' : 's'}`}
-                  </span>
-                </span>
-                {rowProjection !== null && rowProjection > ready && (
-                  <span className="mono-tight shrink-0 font-mono text-[10px] font-semibold tabular-nums text-ink-soft">
-                    → {rowProjection}%
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-      </div>
-
-      {/* The reading column: panel, strengths, and the honest footer. */}
-      <div className="space-y-5">
-      <section id="scan-panel" className="plate scroll-mt-44 overflow-hidden lg:scroll-mt-24">
-        {/* 3 ── the panel: signals in the selected layer */}
-        <div className="px-4 py-5 sm:px-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <div>
-              <h2 className="text-[16px] font-semibold tracking-tight text-ink">
-                {activeMeta.label}
-              </h2>
-              <p className="mt-0.5 text-[12.5px] text-ink-mute">
-                {activeMeta.hint}.
-                {activeProjected !== null && activeProjected > ready && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    Fixing this layer takes distance to production from {ready}% to{' '}
-                    {activeProjected}%.
-                  </span>
-                )}
-              </p>
-            </div>
-            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
-              {groups.length === 0
-                ? 'nothing flagged'
-                : `${groups.length} signal${groups.length === 1 ? '' : 's'} · ${activeFindings.length} finding${activeFindings.length === 1 ? '' : 's'}`}
-            </p>
-          </div>
-
-          {capReason && (
-            <p className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
-              <span
-                className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
-                style={{ background: 'var(--color-signal)' }}
-              >
-                Capped
-              </span>
-              <span>{capReason}</span>
-            </p>
-          )}
-
-          {groups.length > 0 && (
-            <SectionPrompt section={activeMeta.label} hint={activeMeta.hint} groups={groups} />
-          )}
-
-          {groups.length === 0 ? (
-            <p className="prose-serif mt-4 text-[15px] text-ink-soft">
-              {(scoreFor(active) ?? 100) >= 63
-                ? `Nothing flagged in ${activeMeta.label.toLowerCase()}, and the evidence here earns points. Protect it.`
-                : `Nothing flagged in ${activeMeta.label.toLowerCase()}, but nothing earns points here either. The score climbs when positive evidence of decisions appears, not when findings stop.`}
-            </p>
-          ) : (
-            <div className="mt-4 space-y-2.5">
-              {groups.map((g, i) => (
-                <SignalBlock key={g.key} group={g} index={i} defaultOpen={i === 0} />
-              ))}
-            </div>
-          )}
-
-          {active === 'exposure' && testOnly.length > 0 && (
-            <details className="mt-5">
-              <summary className="mono-tight cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute hover:text-ink">
-                {testOnly.length} finding{testOnly.length === 1 ? '' : 's'} in test files — not
-                counted against you
-              </summary>
-              <div className="mt-3 space-y-2.5">
-                {groupBySignal(testOnly).map((g, i) => (
-                  <SignalBlock key={g.key} group={g} index={i} defaultOpen={false} />
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      </section>
-
-      {/* 4 ── what the repo does well: every positive signal that earned
-          points. Not padding — it tells the founder which decisions to
-          protect while fixing the rest. */}
-      {report.positives && report.positives.length > 0 && (
-        <section className="plate overflow-hidden">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6">
-            <p className="label">What this repo does well</p>
-            <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
-              {report.positives.length} signals earning points
-            </p>
-          </div>
-          <ul className="grid grid-cols-1 gap-x-8 gap-y-2 px-5 py-4 sm:grid-cols-2 sm:px-6">
-            {report.positives.map((p) => (
-              <li key={p.id} className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-soft">
-                <svg viewBox="0 0 12 12" className="mt-1 h-3 w-3 shrink-0 text-safe" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <path d="M2 6.5 5 9l5-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span>
-                  {p.label}
-                  <span className="mono-tight ml-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-mute">
-                    +{p.points}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
+      {/* When the repo has no marketing page, say so instead of grading. */}
+      {structure && !structure.applicable && (
+        <section className="plate overflow-hidden px-6 py-4 sm:px-8">
+          <p className="text-[13.5px] leading-relaxed text-ink-soft">
+            <span className="font-semibold text-ink">UI/UX not graded.</span>{' '}
+            {structure.notApplicableReason}
+          </p>
         </section>
       )}
 
-      {/* 5 ── the honest footer, collapsed by default */}
-      <section className="plate overflow-hidden">
-        <details>
-          <summary className="mono-tight cursor-pointer select-none px-6 py-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute transition-colors hover:text-ink sm:px-8 [&::-webkit-details-marker]:hidden [&::marker]:content-none">
-            What this scan can&apos;t see
-          </summary>
-          <ul className="space-y-1.5 border-t border-[var(--line)] px-6 py-4 sm:px-8">
-            {report.limitations.map((l, i) => (
-              <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-ink-soft">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-mute" />
-                <span>{l}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-        {report.provenance && report.provenance.length > 0 && (
-          <p className="border-t border-[var(--line)] px-6 py-3 text-[12px] leading-relaxed text-ink-mute sm:px-8">
-            <span className="font-semibold text-ink-soft">Workflow context (not scored):</span>{' '}
-            {report.provenance.join(' · ')}
-          </p>
-        )}
-      </section>
-      </div>
+      {/* 2 ── master-detail: the deduction ledger beside the reading pane. */}
+      <div className="space-y-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-5 lg:space-y-0">
+        <div className="sticky top-14 z-30 lg:top-24">
+          <section className="plate overflow-hidden">
+            <div className="hidden flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6 lg:flex">
+              <p className="label">The deduction ledger</p>
+              {structure?.applicable && (
+                <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+                  100 − {100 - structure.score} = {structure.score}
+                </p>
+              )}
+            </div>
+
+            {/* On phones the ledger is ONE swipeable row pinned under the
+                header. Tapping a chip jumps to its finding. */}
+            <div
+              className="flex w-0 min-w-full snap-x overflow-x-auto lg:hidden"
+              role="tablist"
+              aria-label="Report findings"
+            >
+              {deductions.map((d) => {
+                const isActive = active === d.signal;
+                return (
+                  <button
+                    key={d.signal}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => selectPanel(d.signal)}
+                    className={`flex w-[104px] shrink-0 snap-start cursor-pointer flex-col items-center gap-1 border-r border-[var(--line)] px-2 pb-2.5 pt-3 transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
+                      isActive ? 'bg-well' : ''
+                    }`}
+                    style={isActive ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
+                  >
+                    <span
+                      className="display text-[17px] leading-none tabular-nums"
+                      style={{ color: d.points >= 8 ? 'var(--color-signal)' : 'var(--color-ink)' }}
+                    >
+                      −{d.points}
+                    </span>
+                    <span className="w-full text-center text-[10.5px] font-semibold leading-tight tracking-tight text-ink line-clamp-2">
+                      {d.name}
+                    </span>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active === EXPOSURE_PANEL}
+                onClick={() => selectPanel(EXPOSURE_PANEL)}
+                className={`flex w-[104px] shrink-0 snap-start cursor-pointer flex-col items-center gap-1 border-r border-[var(--line)] px-2 pb-2.5 pt-3 transition-colors last:border-r-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
+                  active === EXPOSURE_PANEL ? 'bg-well' : ''
+                } ${exposureFindings.length === 0 ? 'opacity-45' : ''}`}
+                style={active === EXPOSURE_PANEL ? { boxShadow: 'inset 0 -3px 0 var(--color-ink)' } : undefined}
+              >
+                <Gauge score={report.insufficientSignal ? null : report.securityScore} small />
+                <span className="w-full truncate text-center text-[10.5px] font-semibold leading-tight tracking-tight text-ink">
+                  Exposure
+                </span>
+              </button>
+            </div>
+
+            {/* The ledger as compact rows: always in view while the finding
+                scrolls, so switching is one click, not a round trip. */}
+            <div className="hidden lg:block" role="tablist" aria-label="Report findings">
+              {deductions.length === 0 && structure?.applicable && (
+                <p className="px-4 py-3 text-[12.5px] leading-relaxed text-ink-soft">
+                  No structural tells found. The score holds at {structure.score}.
+                </p>
+              )}
+              {deductions.map((d) => {
+                const isActive = active === d.signal;
+                const rowProjection = hovered === d.signal ? projectFor(d.signal) : null;
+                return (
+                  <button
+                    key={d.signal}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => selectPanel(d.signal)}
+                    onMouseEnter={() => setHovered(d.signal)}
+                    onMouseLeave={() => setHovered(null)}
+                    onFocus={() => setHovered(d.signal)}
+                    onBlur={() => setHovered(null)}
+                    className={`flex w-full cursor-pointer items-center gap-3 border-b border-[var(--line)] px-4 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
+                      isActive ? 'bg-well' : 'hover:bg-sheet'
+                    }`}
+                    style={isActive ? { boxShadow: 'inset 3px 0 0 var(--color-ink)' } : undefined}
+                  >
+                    <span
+                      className="display w-9 shrink-0 text-right text-[15px] leading-none tabular-nums"
+                      style={{ color: d.points >= 8 ? 'var(--color-signal)' : 'var(--color-ink)' }}
+                    >
+                      −{d.points}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
+                        {d.name}
+                      </span>
+                      {d.filePath && (
+                        <span className="mono-tight block truncate font-mono text-[9.5px] text-ink-mute">
+                          {d.filePath.split('/').slice(-2).join('/')}
+                        </span>
+                      )}
+                    </span>
+                    {rowProjection !== null && rowProjection > ready && (
+                      <span className="mono-tight shrink-0 font-mono text-[10px] font-semibold tabular-nums text-ink-soft">
+                        → {rowProjection}%
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active === EXPOSURE_PANEL}
+                onClick={() => selectPanel(EXPOSURE_PANEL)}
+                onMouseEnter={() => setHovered(EXPOSURE_PANEL)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(EXPOSURE_PANEL)}
+                onBlur={() => setHovered(null)}
+                className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink ${
+                  active === EXPOSURE_PANEL ? 'bg-well' : 'hover:bg-sheet'
+                } ${exposureFindings.length === 0 && active !== EXPOSURE_PANEL ? 'opacity-45 hover:opacity-90' : ''}`}
+                style={active === EXPOSURE_PANEL ? { boxShadow: 'inset 3px 0 0 var(--color-ink)' } : undefined}
+              >
+                <Gauge score={report.insufficientSignal ? null : report.securityScore} small />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-semibold leading-tight tracking-tight text-ink">
+                    Exposure
+                  </span>
+                  <span className="mono-tight block font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-mute">
+                    {exposureFindings.length === 0
+                      ? 'clear'
+                      : `${exposureFindings.length} finding${exposureFindings.length === 1 ? '' : 's'}`}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* The reading column: the finding, then the closing cards. */}
+        <div className="space-y-5">
+          <section id="scan-panel" className="plate scroll-mt-44 overflow-hidden lg:scroll-mt-24">
+            {activeDeduction && structure ? (
+              <DeductionDetail
+                deduction={activeDeduction}
+                projected={activeProjectedStructure}
+                score={structure.score}
+              />
+            ) : (
+              <div className="px-4 py-5 sm:px-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <div>
+                    <h2 className="text-[16px] font-semibold tracking-tight text-ink">Exposure</h2>
+                    <p className="mt-0.5 text-[12.5px] text-ink-mute">
+                      Keys, injections, open databases.
+                    </p>
+                  </div>
+                  <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+                    {exposureGroups.length === 0
+                      ? 'nothing flagged'
+                      : `${exposureGroups.length} signal${exposureGroups.length === 1 ? '' : 's'} · ${exposureFindings.length} finding${exposureFindings.length === 1 ? '' : 's'}`}
+                  </p>
+                </div>
+
+                {report.securityCapReason && (
+                  <p className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
+                    <span
+                      className="mt-0.5 shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-white"
+                      style={{ background: 'var(--color-signal)' }}
+                    >
+                      Capped
+                    </span>
+                    <span>{report.securityCapReason}</span>
+                  </p>
+                )}
+
+                {exposureGroups.length === 0 ? (
+                  <p className="prose-serif mt-4 text-[15px] text-ink-soft">
+                    Nothing flagged in the exposure checks. Read the limits below before treating
+                    that as a clean bill of health.
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-2.5">
+                    {exposureGroups.map((g, i) => (
+                      <SignalBlock key={g.key} group={g} index={i} defaultOpen={i === 0} />
+                    ))}
+                  </div>
+                )}
+
+                {testOnly.length > 0 && (
+                  <details className="mt-5">
+                    <summary className="mono-tight cursor-pointer select-none font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute hover:text-ink">
+                      {testOnly.length} finding{testOnly.length === 1 ? '' : 's'} in test files — not
+                      counted against you
+                    </summary>
+                    <div className="mt-3 space-y-2.5">
+                      {groupBySignal(testOnly).map((g, i) => (
+                        <SignalBlock key={g.key} group={g} index={i} defaultOpen={false} />
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* 3 ── the dialect and the percentile, as the spec orders them. */}
+          {structure?.applicable && (structure.dialectNote || structure.percentileLine) && (
+            <section className="plate overflow-hidden px-5 py-4 sm:px-6">
+              {structure.dialectNote && (
+                <p className="text-[13.5px] leading-relaxed text-ink-soft">
+                  <span className="mono-tight mr-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute">
+                    Dialect
+                  </span>
+                  {structure.dialectNote}
+                </p>
+              )}
+              {structure.percentileLine && (
+                <p className={`text-[13.5px] leading-relaxed text-ink-soft ${structure.dialectNote ? 'rule-hair mt-3 pt-3' : ''}`}>
+                  <span className="mono-tight mr-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute">
+                    Percentile
+                  </span>
+                  {structure.percentileLine}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* 4 ── the professional end state: the rules to hold the page
+              against once the findings above are closed. */}
+          {structure?.applicable && (
+            <section className="plate overflow-hidden">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--line)] px-5 py-3 sm:px-6">
+                <p className="label">The professional end state</p>
+                <p className="mono-tight font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+                  hold your page against these
+                </p>
+              </div>
+              <ul className="grid grid-cols-1 gap-x-8 gap-y-2 px-5 py-4 sm:grid-cols-2 sm:px-6">
+                {END_STATE_RULES.map((rule) => (
+                  <li key={rule} className="flex items-start gap-2.5 text-[13px] leading-snug text-ink-soft">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-ink-mute" aria-hidden />
+                    <span>{rule}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* 5 ── the honest footer, collapsed by default */}
+          <section className="plate overflow-hidden">
+            <details>
+              <summary className="mono-tight cursor-pointer select-none px-6 py-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-mute transition-colors hover:text-ink sm:px-8 [&::-webkit-details-marker]:hidden [&::marker]:content-none">
+                What this scan can&apos;t see
+              </summary>
+              <ul className="space-y-1.5 border-t border-[var(--line)] px-6 py-4 sm:px-8">
+                {report.limitations.map((l, i) => (
+                  <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-ink-soft">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-mute" />
+                    <span>{l}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+            {report.provenance && report.provenance.length > 0 && (
+              <p className="border-t border-[var(--line)] px-6 py-3 text-[12px] leading-relaxed text-ink-mute sm:px-8">
+                <span className="font-semibold text-ink-soft">Workflow context (not scored):</span>{' '}
+                {report.provenance.join(' · ')}
+              </p>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

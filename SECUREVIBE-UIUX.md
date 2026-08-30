@@ -1,5 +1,13 @@
 # SECUREVIBE: UI/UX SCORING MODULE
 
+> **SUPERSEDED (2026-08-30).** The UI/UX grading engine is now specified by
+> `SECUREVIBE-GRADING.md`, built from a direct comparison of 11 vibe-coded
+> sites against professional ones: score the skeleton (template script,
+> content-as-data, evidence-shaped-nothing), not the paint. The
+> earned-from-zero dimension model in this file is retired; the engine
+> lives in `lib/scanner/uiux/`. The voice rules (SECUREVIBE.md 5.4) and
+> the product thesis still apply. This file stays for the research record.
+
 **Extension to `SECUREVIBE.md`. Load both. This file supersedes any UI/UX scoring logic in the master document.**
 
 **Read Part 12 first if you only read one part.** It supersedes Sections 6.3, 6.5, and Appendix B based on calibration against twenty hand-labeled real sites, and it adds an eighth dimension and a second generation of tells that the original rubric missed entirely.

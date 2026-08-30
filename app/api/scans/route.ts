@@ -227,15 +227,6 @@ export async function POST(request: Request) {
         // Tells the scanner whether a committed .env is provable (github) or
         // only a warning (zip) — see the git-awareness fix in checks/secrets.
         sourceType: body.sourceType,
-        // Optional model-assisted copy check (off unless the key is set).
-        // Only short visible-text excerpts are ever sent — never code.
-        llm: process.env.SECUREVIBE_LLM_API_KEY
-          ? {
-              apiKey: process.env.SECUREVIBE_LLM_API_KEY,
-              baseUrl: process.env.SECUREVIBE_LLM_BASE_URL || undefined,
-              model: process.env.SECUREVIBE_LLM_MODEL || undefined,
-            }
-          : undefined,
       }),
     persistFindings: async (findings) => {
       if (findings.length === 0) return;

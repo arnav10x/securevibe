@@ -7,30 +7,22 @@
 //     finding sets a ceiling the rest of the report cannot lift, because an
 //     attacker exploits your weakest link, not your average.
 //
-//   Craft — per SECUREVIBE-UIUX.md, EARNED FROM ZERO across eight
-//     dimensions. Points exist only where positive evidence of a decision
-//     exists in source. The lowest triggered ceiling bounds the total, and
-//     the distinct-tell density multiplier applies last. The score answers
-//     one question: how much evidence is there that a person with judgment
-//     made decisions here?
+//   UI/UX — per SECUREVIBE-GRADING.md: start at 100, subtract the
+//     structural deductions the signal catalog found, floor at 0. The
+//     score reads the skeleton, not the paint: prose quality, code
+//     quality, and color never move it, in either direction.
 //
 // All of it is arithmetic, kept readable so the formula is explainable to a
 // non-technical founder and stable enough that scores compare over time.
 
 import type {
   Confidence,
-  DesignCategoryScore,
   Finding,
   ReportCard,
   Severity,
+  StructureSummary,
 } from './types';
-import {
-  computeCraft,
-  nextBandFor,
-  type CraftInput,
-  type CraftResult,
-} from './craft-score';
-import type { DesignAudit } from './checks/design';
+import type { StructureReport } from './uiux';
 import { isTestPath } from './util';
 
 /** Base points a security finding costs, before confidence/context scaling. */
@@ -174,58 +166,32 @@ function lower(title: string): string {
   return title.charAt(0).toLowerCase() + title.slice(1);
 }
 
-/**
- * The craft score, per SECUREVIBE-UIUX.md: earned from zero, bounded by
- * the lowest ceiling, then multiplied by tell density.
- */
-export type CraftAuditInput = Pick<
-  DesignAudit,
-  'positives' | 'tells' | 'ceilings' | 'dimensionCaps'
->;
-
-export function assessCraft(audit: CraftAuditInput): CraftResult {
-  const input: CraftInput = {
-    positives: audit.positives,
-    tells: audit.tells,
-    ceilings: audit.ceilings,
-    dimensionCaps: audit.dimensionCaps,
-  };
-  return computeCraft(input);
-}
-
-/** Plain-words reading of the vibe meter. */
-function vibeVerdict(score: number): string {
-  if (score >= 80) return 'Unmistakably vibe coded';
-  if (score >= 50) return 'Clearly template-flavored';
-  if (score >= 20) return 'A few template tells';
+/** Plain-words reading of the vibe meter (100 − structure score). */
+export function vibeVerdict(vibe: number): string {
+  if (vibe >= 80) return 'Unmistakably vibe coded';
+  if (vibe >= 50) return 'Clearly template-flavored';
+  if (vibe >= 20) return 'A few template tells';
   return 'Reads hand-built';
 }
 
 /**
- * The headline verdict: the band sentence plus the bounded goal. "You are
- * in the top 50%. Fixing the highest-impact findings moves you toward the
- * top 30%." A target, not just a judgment.
+ * The headline verdict: the band sentence, the percentile line the spec
+ * mandates, and the exposure note when it is the thing to fix first.
  */
 export function verdictFor(
-  craft: CraftResult,
+  structure: StructureReport,
   security: SecurityAssessment,
   insufficientSignal: boolean,
-  craftApplicable: boolean,
 ): string {
   if (insufficientSignal) {
     return 'Not enough code to read. Point the scan at the real project.';
   }
-  if (!craftApplicable) {
-    return 'No interface files to read, so this report covers exposure only.';
+  if (!structure.applicable) {
+    return 'No marketing page found to grade, so this report covers exposure only.';
   }
-  const next = nextBandFor(craft.score);
-  const base = `${craft.band}. That places this repo in the ${craft.percentile.toLowerCase()} of what we see.`;
-  const security_note =
+  const securityNote =
     security.score < 60 ? ' Close the exposure findings before shipping.' : '';
-  const target = next
-    ? ` Fixing the highest-impact findings below moves it toward the ${next.percentile.toLowerCase()}.`
-    : ' The findings below are refinements.';
-  return base + target + security_note;
+  return `${structure.band}. ${structure.percentileLine}${securityNote}`;
 }
 
 /** The honest "what this scan cannot see" box. Always shown. */
@@ -234,7 +200,7 @@ const SOURCE_SCAN_LIMITATIONS = [
     'whether your live database is actually locked down (Row Level Security). ' +
     'A live-URL scan is what tests that, and it is where most real breaches ' +
     'are caught.',
-  'It cannot catch business-logic flaws, one user reading another user\u2019s ' +
+  'It cannot catch business-logic flaws, one user reading another user’s ' +
     'data, or anything that only shows up at runtime.',
   'It does not render the page, so rendered appearance, real contrast in a ' +
     'runtime theme, and performance numbers are out of scope. Nothing here ' +
@@ -246,30 +212,49 @@ const SOURCE_SCAN_LIMITATIONS = [
 export interface ReportMeta {
   /** How many real code files were actually scanned (drives insufficientSignal). */
   codeFilesScanned: number;
+  /** Workflow markers recorded as context. Never scored. */
+  provenance?: string[];
+}
+
+/** The stored summary is the analysis result, field for field. */
+export function toStructureSummary(structure: StructureReport): StructureSummary {
+  return {
+    applicable: structure.applicable,
+    notApplicableReason: structure.notApplicableReason,
+    score: structure.score,
+    band: structure.band,
+    deductions: structure.findings.map((f) => ({
+      signal: f.signal,
+      name: f.name,
+      points: f.points,
+      found: f.found,
+      why: f.why,
+      fixPrompt: f.fixPrompt,
+      filePath: f.filePath,
+      lineStart: f.lineStart,
+      evidence: f.evidence,
+    })),
+    dialect: structure.dialect,
+    dialectNote: structure.dialectNote,
+    scriptMatch: structure.scriptMatch,
+    pageFile: structure.pageFile,
+    percentile: structure.percentile,
+    percentileLine: structure.percentileLine,
+  };
 }
 
 export function buildReportCard(
   findings: Finding[],
-  audit: DesignAudit,
+  structure: StructureReport,
   meta: ReportMeta = { codeFilesScanned: 1 },
 ): ReportCard {
   const sec = assessSecurity(findings);
-  const craft = assessCraft(audit);
   const insufficientSignal = meta.codeFilesScanned === 0;
-  const craftApplicable = audit.uiFileCount > 0;
-
-  const categories: DesignCategoryScore[] = craft.dimensions
-    .map((d) => ({
-      id: d.id,
-      label: d.label,
-      // Categories render as 0-100 gauges; earned/max keeps them comparable.
-      score: Math.round((d.earned / d.max) * 100),
-      findingCount: 0, // the UI counts findings per panel itself
-    }))
-    .sort((a, b) => a.score - b.score);
+  const applicable = structure.applicable && !insufficientSignal;
+  const vibe = applicable ? Math.max(0, 100 - structure.score) : 0;
 
   return {
-    securityGrade: insufficientSignal ? '\u2014' : sec.grade,
+    securityGrade: insufficientSignal ? '—' : sec.grade,
     securityScore: sec.score,
     securityCapReason: sec.capReason,
     tally: sec.tally,
@@ -277,28 +262,12 @@ export function buildReportCard(
     clean: sec.clean && !insufficientSignal,
     insufficientSignal,
     limitations: SOURCE_SCAN_LIMITATIONS,
-    craftGrade: insufficientSignal || !craftApplicable ? '\u2014' : letterGrade(craft.score),
-    craftScore: craftApplicable ? craft.score : 0,
-    craftBand: craftApplicable ? craft.band : undefined,
-    craftPercentile: craftApplicable ? craft.percentile : undefined,
-    craftCapReason:
-      craft.ceiling && craft.ceiling.max < craft.raw
-        ? `Capped at ${craft.ceiling.max}: ${craft.ceiling.reason}.`
-        : null,
-    verdict: verdictFor(craft, sec, insufficientSignal, craftApplicable),
-    vibeScore: audit.vibeScore,
-    vibeVerdict: vibeVerdict(audit.vibeScore),
-    categories,
-    positives: audit.positives,
-    tells: craft.distinctTells,
-    tellMultiplier: craft.multiplier,
-    categoryFit: audit.categoryFit,
-    craftDetail: {
-      positives: audit.positives,
-      tells: audit.tells,
-      ceilings: audit.ceilings,
-      dimensionCaps: audit.dimensionCaps,
-    },
-    provenance: audit.provenance,
+    craftGrade: applicable ? letterGrade(structure.score) : '—',
+    craftScore: applicable ? structure.score : 0,
+    structure: toStructureSummary(structure),
+    verdict: verdictFor(structure, sec, insufficientSignal),
+    vibeScore: vibe,
+    vibeVerdict: vibeVerdict(vibe),
+    provenance: meta.provenance ?? [],
   };
 }
